@@ -169,3 +169,38 @@ class Config(RawConfigParser):
                 if self.has_option(section, option):
                     continue
                 RawConfigParser.set(self, section, option, value)
+
+
+def load_into_settings(filename, settings):
+    """Load config file contents into a Pyramid settings dict.
+
+    This is a helper function for initialising a Pyramid settings dict from
+    a config file.  It flattens the config file sections into dotted settings
+    names and updates the given dictionary in place.
+
+    You would typically use this when constructing a Pyramid Configurator
+    object, like so::
+
+        def main(global_config, **settings):
+            config_file = global_config['__file__']
+            load_info_settings(config_file, settings)
+            config = Configurator(settings=settings)
+
+    """
+    filename = os.path.abspath(
+                 os.path.normpath(
+                   os.path.expandvars(
+                     os.path.expanduser(
+                       filename))))
+
+    config = Config(filename)
+
+    # Put values from the config file into the pyramid settings dict.
+    for section in config.sections():
+        setting_prefix = section.replace(":", ".")
+        for name, value in config.get_map(section).iteritems():
+            settings[setting_prefix + "." + name] = value
+
+    # Store a reference to the Config object itself for later retrieval.
+    settings['config'] = config
+    return config
