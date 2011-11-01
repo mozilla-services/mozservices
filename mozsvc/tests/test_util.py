@@ -34,7 +34,10 @@
 # the terms of any one of the MPL, the GPL or the LGPL.
 #
 # ***** END LICENSE BLOCK *****
-from mozsvc.util import round_time
+
+import unittest
+
+from mozsvc.util import round_time, resolve_name
 
 
 class TestUtil(unittest.TestCase):
@@ -60,3 +63,18 @@ class TestUtil(unittest.TestCase):
         # changing the precision
         res = round_time(129084.198271987, precision=3)
         self.assertEqual(str(res), '129084.198')
+
+    def test_resolve_name(self):
+
+        # Resolving by absolute path
+        import os.path
+        self.assertEquals(os.path.abspath, resolve_name("os.path.abspath"))
+        self.assertEquals(os.path.abspath, resolve_name("os.path:abspath"))
+
+        # Resolving by relative path to package object
+        self.assertEquals(os.path.abspath, resolve_name(".path.abspath", os))
+        self.assertEquals(os.path.abspath, resolve_name(".path:abspath", os))
+
+        # Resolving by relative path to package name
+        self.assertEquals(os.path.abspath, resolve_name(".abspath", "os.path"))
+        self.assertEquals(os.path.abspath, resolve_name(":abspath", "os.path"))

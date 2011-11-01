@@ -93,20 +93,7 @@ or::
 
 from zope.interface import providedBy
 
-from pyramid.util import DottedNameResolver
-
-
-def resolve_name(name, package=None):
-    """Resolve dotted name into a python object.
-
-    This function resolves a dotted name as a reference to a python object,
-    returning whatever object happends to live at that path.  It's a simple
-    convenience wrapper around pyramid's DottedNameResolver.
-
-    The optional argument 'package' specifies the package name for relative
-    imports.  If not specified, only absolute paths will be supported.
-    """
-    return DottedNameResolver(package).resolve(name)
+from mozsvc.util import resolve_name
 
 
 def load_and_register(section_name, config, registry_name=u""):
