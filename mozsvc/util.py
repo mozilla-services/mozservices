@@ -73,3 +73,16 @@ def resolve_name(name, package=None):
     imports.  If not specified, only absolute paths will be supported.
     """
     return DottedNameResolver(package).resolve(name)
+
+
+def maybe_resolve_name(name_or_object, package=None):
+    """Resolve dotted name or object into a python object.
+
+    This function resolves a dotted name as a reference to a python object,
+    returning whatever object happends to live at that path.  If the given
+    name is not a string, it is returned unchanged.
+
+    The optional argument 'package' specifies the package name for relative
+    imports.  If not specified, only absolute paths will be supported.
+    """
+    return DottedNameResolver(package).maybe_resolve(name_or_object)
