@@ -36,8 +36,9 @@
 # ***** END LICENSE BLOCK *****
 
 import unittest
+import os.path
 
-from mozsvc.util import round_time, resolve_name
+from mozsvc.util import round_time, resolve_name, maybe_resolve_name
 
 
 class TestUtil(unittest.TestCase):
@@ -67,7 +68,6 @@ class TestUtil(unittest.TestCase):
     def test_resolve_name(self):
 
         # Resolving by absolute path
-        import os.path
         self.assertEquals(os.path.abspath, resolve_name("os.path.abspath"))
         self.assertEquals(os.path.abspath, resolve_name("os.path:abspath"))
 
@@ -78,3 +78,9 @@ class TestUtil(unittest.TestCase):
         # Resolving by relative path to package name
         self.assertEquals(os.path.abspath, resolve_name(".abspath", "os.path"))
         self.assertEquals(os.path.abspath, resolve_name(":abspath", "os.path"))
+
+    def test_maybe_resolve_name(self):
+
+        self.assertEquals(os.path, maybe_resolve_name("os.path"))
+        self.assertEquals(os.path, maybe_resolve_name(os.path))
+        self.assertEquals(None, maybe_resolve_name(None))
