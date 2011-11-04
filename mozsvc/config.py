@@ -41,6 +41,8 @@ import re
 import os
 from ConfigParser import RawConfigParser, Error
 
+from pyramid.config import Configurator
+
 _IS_NUMBER = re.compile('^-?[0-9].*')
 _IS_ENV_VAR = re.compile('\$\{(\w.*)?\}')
 
@@ -204,3 +206,17 @@ def load_into_settings(filename, settings):
     # Store a reference to the Config object itself for later retrieval.
     settings['config'] = config
     return config
+
+
+def get_configurator(global_config, **settings):
+    """Create a pyramid Configurator and populate it with sensible defaults.
+
+    This function is a helper to create and pre-populate a Configurator
+    object using the given paste-deploy settings dicts.  It uses the
+    mozsvc.config module to flatten the config paste-deploy config file
+    into the settings dict so that non-mozsvc pyramid apps can read values
+    from it easily.
+    """
+    config_file = global_config['__file__']
+    load_into_settings(config_file, settings)
+    return Configurator(settings=settings)
