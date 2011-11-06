@@ -66,7 +66,7 @@ def resolve_name(name, package=None):
     """Resolve dotted name into a python object.
 
     This function resolves a dotted name as a reference to a python object,
-    returning whatever object happends to live at that path.  It's a simple
+    returning whatever object happens to live at that path.  It's a simple
     convenience wrapper around pyramid's DottedNameResolver.
 
     The optional argument 'package' specifies the package name for relative
@@ -79,7 +79,7 @@ def maybe_resolve_name(name_or_object, package=None):
     """Resolve dotted name or object into a python object.
 
     This function resolves a dotted name as a reference to a python object,
-    returning whatever object happends to live at that path.  If the given
+    returning whatever object happens to live at that path.  If the given
     name is not a string, it is returned unchanged.
 
     The optional argument 'package' specifies the package name for relative
