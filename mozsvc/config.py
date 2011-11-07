@@ -217,6 +217,7 @@ def get_configurator(global_config, **settings):
     into the settings dict so that non-mozsvc pyramid apps can read values
     from it easily.
     """
-    config_file = global_config['__file__']
-    load_into_settings(config_file, settings)
+    config_file = global_config.get('__file__')
+    if config_file is not None:
+        load_into_settings(config_file, settings)
     return Configurator(settings=settings)

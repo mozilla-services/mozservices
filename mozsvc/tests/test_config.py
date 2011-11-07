@@ -178,4 +178,10 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEquals(settings["storage.e"], "f")
         self.assertEquals(settings["storage.g"], "h")
         self.assertEquals(settings["multi.once.storage.i"], "j")
-        self.assertEquals(settings["multi.thrice.storage.i"], "jjj")
+
+    def test_get_configurator_nofile(self):
+        global_config = {"blah": "blech"}
+        settings = {"pyramid.testing": "test"}
+        config = get_configurator(global_config, **settings)
+        settings = config.get_settings()
+        self.assertEquals(settings["pyramid.testing"], "test")
