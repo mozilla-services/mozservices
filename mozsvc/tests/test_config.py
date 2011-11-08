@@ -39,7 +39,7 @@ import tempfile
 import os
 from StringIO import StringIO
 
-from mozsvc.config import (Config, EnvironmentNotFoundError,
+from mozsvc.config import (Config, EnvironmentNotFoundError, SettingsDict,
                            load_into_settings, get_configurator)
 
 
@@ -178,6 +178,9 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEquals(settings["storage.e"], "f")
         self.assertEquals(settings["storage.g"], "h")
         self.assertEquals(settings["multi.once.storage.i"], "j")
+        self.assertEquals(settings.getsection("multi")["once.storage.i"], "j")
+        self.assertEquals(settings.getsection("multi.once")["storage.i"], "j")
+        self.assertEquals(settings.getsection("multi.once.storage")["i"], "j")
 
     def test_get_configurator_nofile(self):
         global_config = {"blah": "blech"}
@@ -185,3 +188,29 @@ class ConfigTestCase(unittest.TestCase):
         config = get_configurator(global_config, **settings)
         settings = config.get_settings()
         self.assertEquals(settings["pyramid.testing"], "test")
+
+    def test_settings_dict_getsection(self):
+        settings = SettingsDict({
+          "a.one": 1,
+          "a.two": 2,
+          "b.three": 3,
+          "four": 4,
+        })
+        self.assertEquals(settings.getsection("a"), {"one": 1, "two": 2})
+        self.assertEquals(settings.getsection("b"), {"three": 3})
+        self.assertEquals(settings.getsection("c"), {})
+        self.assertEquals(settings.getsection(""), {"four": 4})
+
+    def test_settings_dict_setdefaults(self):
+        settings = SettingsDict({
+          "a.one": 1,
+          "a.two": 2,
+          "b.three": 3,
+          "four": 4,
+        })
+        settings.setdefaults({"a.two": "TWO", "a.five": 5, "new": "key"})
+        self.assertEquals(settings.getsection("a"),
+                         {"one": 1, "two": 2, "five": 5})
+        self.assertEquals(settings.getsection("b"), {"three": 3})
+        self.assertEquals(settings.getsection("c"), {})
+        self.assertEquals(settings.getsection(""), {"four": 4, "new": "key"})

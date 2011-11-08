@@ -208,6 +208,71 @@ def load_into_settings(filename, settings):
     return config
 
 
+class SettingsDict(dict):
+    """A dict subclass with some extra helpers for dealing with app settings.
+
+    This class extends the standard dictionary interface with some extra helper
+    methods that are handy when dealing with application settings.  It expects
+    the keys to be dotted setting names, where each component indicates one
+    section in the settings heirarchy.  You get the following extras:
+
+        * setdefaults:  copy any unset settings from another dict
+        * getsection:   return a dict of settings for just one subsection
+
+    """
+
+    separator = "."
+
+    def getsection(self, section):
+        """Get a dict for just one sub-section of the config.
+
+        This method extracts all the keys belonging to the name section and
+        returns those values in a dict.  The section name is removed from
+        each key.  For example::
+
+            >>> c = SettingsDict({"a.one": 1, "a.two": 2, "b.three: 3})
+            >>> c.getsection("a")
+            {"one": 1, "two", 2}
+            >>>
+            >>> c.getsection("b")
+            {"three": 3}
+            >>>
+            >>> c.getsection("c")
+            {}
+
+        """
+        section_items = SettingsDict()
+        # If the section is "" then get keys without a section.
+        if not section:
+            for key, value in self.iteritems():
+                if self.separator not in key:
+                    section_items[key] = value
+        # Otherwise, get keys prefixed with that section name.
+        else:
+            prefix = section + self.separator
+            for key, value in self.iteritems():
+                if key.startswith(prefix):
+                    section_items[key[len(prefix):]] = value
+        return section_items
+
+    def setdefaults(self, *args, **kwds):
+        """Import unset keys from another dict.
+
+        This method lets you update the dict using defaults from another
+        dict and/or using keyword arguments.  It's like the standard update()
+        method except that it doesn't overwrite existing keys.
+        """
+        for arg in args:
+            if hasattr(arg, "keys"):
+                for k in arg:
+                    self.setdefault(k, arg[k])
+            else:
+                for k, v in arg:
+                    self.setdefault(k, v)
+        for k, v in kwds.iteritems():
+            self.setdefault(k, v)
+
+
 def get_configurator(global_config, **settings):
     """Create a pyramid Configurator and populate it with sensible defaults.
 
@@ -217,7 +282,13 @@ def get_configurator(global_config, **settings):
     into the settings dict so that non-mozsvc pyramid apps can read values
     from it easily.
     """
+    # Populate a SettingsDict with settings from the deployment file.
+    settings = SettingsDict(settings)
     config_file = global_config.get('__file__')
     if config_file is not None:
         load_into_settings(config_file, settings)
-    return Configurator(settings=settings)
+    # Update with default pyramid settings, and then insert for all to use.
+    config = Configurator(settings={})
+    settings.setdefaults(config.registry.settings)
+    config.registry.settings = settings
+    return config
