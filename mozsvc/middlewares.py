@@ -136,7 +136,8 @@ class CatchErrorMiddleware(object):
             response = json.dumps("application error: crash id %s" % hash)
             if self.hook:
                 try:
-                    response = self.hook()
+                    response = self.hook({'error': err, 'crash_id': hash,
+                                          'environ': environ})
                 except Exception:
                     pass
 
