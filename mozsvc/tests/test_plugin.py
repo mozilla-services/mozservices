@@ -24,6 +24,7 @@ class ITest2(Interface):
 class Test1(object):
     """A concrete implementation of ITest1."""
     implements(ITest1)
+
     def __init__(self, **kwds):
         self.kwds = kwds
 
@@ -31,6 +32,7 @@ class Test1(object):
 class Test2(object):
     """A concrete implementation of ITest2."""
     implements(ITest2)
+
     def __init__(self, **kwds):
         self.kwds = kwds
 
@@ -38,6 +40,7 @@ class Test2(object):
 class Test1And2(object):
     """A concrete implementation of both ITest1 and ITest2."""
     implements(ITest1, ITest2)
+
     def __init__(self, **kwds):
         self.kwds = kwds
 
@@ -109,8 +112,8 @@ class TestPluginLoading(unittest.TestCase):
           "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
         }
         config = Configurator(settings=settings)
-        plugin1 = load_and_register("test1", config)
-        plugin_both = load_and_register("test_both", config)
+        load_and_register("test1", config)
+        load_and_register("test_both", config)
         self.assertRaises(ConfigurationConflictError, config.commit)
 
     def test_loading_with_conflict_resolution(self):
@@ -122,7 +125,7 @@ class TestPluginLoading(unittest.TestCase):
 
         # Load plugin_both last, it will win for both interfaces.
         config = Configurator(settings=settings, autocommit=True)
-        plugin1 = load_and_register("test1", config)
+        load_and_register("test1", config)
         plugin2 = load_and_register("test2", config)
         plugin_both = load_and_register("test_both", config)
         self.failUnless(config.registry.queryUtility(ITest1) is plugin_both)
@@ -130,7 +133,7 @@ class TestPluginLoading(unittest.TestCase):
 
         # Load plugin_both before plugin2, it will be beaten only for that.
         config = Configurator(settings=settings, autocommit=True)
-        plugin1 = load_and_register("test1", config)
+        load_and_register("test1", config)
         plugin_both = load_and_register("test_both", config)
         plugin2 = load_and_register("test2", config)
         self.failUnless(config.registry.queryUtility(ITest1) is plugin_both)

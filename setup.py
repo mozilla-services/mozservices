@@ -9,12 +9,12 @@ with open(os.path.join(here, 'README.txt')) as f:
 with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
-requires = ['pyramid', 'pyramid_debugtoolbar']
+requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson']
 
 
 setup(name='mozsvc',
       version='0.1',
-      description='mozsvc',
+      description='Various utilities for Mozilla apps',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
         "Programming Language :: Python",
@@ -22,9 +22,9 @@ setup(name='mozsvc',
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: WSGI :: Application",
         ],
-      author='',
-      author_email='',
-      url='',
+      author='Mozilla Services',
+      author_email='services-dev@mozilla.org',
+      url='https://github.com/mozilla-services/mozservices',
       keywords='web pyramid pylons',
       packages=find_packages(),
       include_package_data=True,

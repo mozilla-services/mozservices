@@ -115,8 +115,10 @@ def load_and_register(section_name, config, registry_name=u""):
     # Use the Configurators delayed-registration machinery to get
     # conflict-resolution and so-forth for free.
     for interface in providedBy(plugin):
+
         def register(interface=interface):
             config.registry.registerUtility(plugin, interface, registry_name)
+
         config.action(interface, register)
     # And return it for user convenience.
     return plugin
