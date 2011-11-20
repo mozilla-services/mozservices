@@ -223,6 +223,17 @@ class SettingsDict(dict):
 
     separator = "."
 
+    def copy(self):
+        """D.copy() -> a shallow copy of D.
+
+        This overrides the default dict.copy method to ensure that the
+        copy is also an instance of SettingsDict.
+        """
+        new_items = self.__class__()
+        for k, v in self.iteritems():
+            new_items[k] = v
+        return new_items
+
     def getsection(self, section):
         """Get a dict for just one sub-section of the config.
 
@@ -241,7 +252,7 @@ class SettingsDict(dict):
             {}
 
         """
-        section_items = SettingsDict()
+        section_items = self.__class__()
         # If the section is "" then get keys without a section.
         if not section:
             for key, value in self.iteritems():

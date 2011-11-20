@@ -189,6 +189,17 @@ class ConfigTestCase(unittest.TestCase):
         settings = config.get_settings()
         self.assertEquals(settings["pyramid.testing"], "test")
 
+    def test_settings_dict_copy(self):
+        settings = SettingsDict({
+          "a.one": 1,
+          "a.two": 2,
+          "b.three": 3,
+          "four": 4,
+        })
+        new_settings = settings.copy()
+        self.assertEqual(settings, new_settings)
+        self.failUnless(isinstance(new_settings, SettingsDict))
+
     def test_settings_dict_getsection(self):
         settings = SettingsDict({
           "a.one": 1,

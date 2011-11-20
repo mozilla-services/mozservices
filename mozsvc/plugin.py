@@ -96,11 +96,11 @@ from zope.interface import providedBy
 from mozsvc.util import resolve_name
 
 
-def load_and_register(section_name, config, registry_name=u""):
+def load_and_register(section_name, config, interface=None, registry_name=u""):
     """Load a plugin from the named configuration section.
 
     Given a Pyramid Configurator object and the name of a config section,
-    this function loads the plugin as specified in that section and then.
+    this function loads the plugin as specified in that section and then
     registers it into the Pyramid registry as a utility for each of the
     interfaces that it provides.
     """
@@ -111,15 +111,20 @@ def load_and_register(section_name, config, registry_name=u""):
         plugin = load_from_config(section_name, settings["config"])
     else:
         plugin = load_from_settings(section_name, settings)
+    if interface is not None:
+        interfaces = [interface]
+    else:
+        interfaces = providedBy(plugin)
+        if not interfaces:
+            msg = "Plugin %s provides no interfaces" % (plugin,)
+            raise ValueError(msg)
     # Register the plugin for each interface that it provides.
     # Use the Configurators delayed-registration machinery to get
     # conflict-resolution and so-forth for free.
-    for interface in providedBy(plugin):
-
+    for interface in interfaces:
         def register(interface=interface):
             config.registry.registerUtility(plugin, interface, registry_name)
-
-        config.action(interface, register)
+        config.action((interface, registry_name), register)
     # And return it for user convenience.
     return plugin
 
