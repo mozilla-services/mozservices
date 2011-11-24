@@ -2,4 +2,4 @@
 MozSvc
 ======
 
-Various utilities for Pyramid-based Mozilla applicaltions
+Various utilities for Pyramid-based Mozilla applications
