@@ -115,9 +115,6 @@ def load_and_register(section_name, config, interface=None, registry_name=u""):
         interfaces = [interface]
     else:
         interfaces = providedBy(plugin)
-        if not interfaces:
-            msg = "Plugin %s provides no interfaces" % (plugin,)
-            raise ValueError(msg)
     # Register the plugin for each interface that it provides.
     # Use the Configurators delayed-registration machinery to get
     # conflict-resolution and so-forth for free.
