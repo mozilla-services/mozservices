@@ -72,7 +72,7 @@ class TestPluginLoading(unittest.TestCase):
           "test1.backend": "mozsvc.tests.test_plugin.Test1",
           "test1.arg1": 1,
           "test1.hello": "world",
-          "test2.dontusethis": "seriously"
+          "test2.dontusethis": "seriously",
         }
         config = Configurator(settings=settings)
         plugin = load_and_register("test1", config)
