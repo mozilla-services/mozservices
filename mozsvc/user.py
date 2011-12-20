@@ -122,9 +122,10 @@ def authenticate(request, credentials, attrs=()):
             return False
 
     # Normalize the password, if any, to be unicode.
-    if "password" in credentials and not isinstance(credentials["password"], unicode):
+    password = credentials.get("password")
+    if password is not None and not isinstance(password, unicode):
         try:
-            credentials["password"] = credentials["password"].decode("utf8")
+            credentials["password"] = password.decode("utf8")
         except UnicodeDecodeError:
             return None
 

@@ -151,18 +151,21 @@ class UserTestCase(unittest.TestCase):
     def test_authenticate_with_unicode_password(self):
         credentials = {"username": "user1", "password": "password1"}
         new_password = u"password\N{GREEK SMALL LETTER ALPHA}"
-        self.auth.update_password({"username": "user1"}, credentials, new_password)
+        self.auth.update_password({"username": "user1"}, credentials,
+                                  new_password)
         # Auth works with unicode password.
         request = self._make_request()
         credentials = {"username": "user1", "password": new_password}
         self.assertTrue(mozsvc.user.authenticate(request, credentials))
         # Auth works with utf-encoded password.
         request = self._make_request()
-        credentials = {"username": "user1", "password": new_password.encode("utf8")}
+        credentials = {"username": "user1",
+                       "password": new_password.encode("utf8")}
         self.assertTrue(mozsvc.user.authenticate(request, credentials))
         # Auth fails with badly-encoded password
         request = self._make_request()
-        credentials = {"username": "user1", "password": new_password.encode("utf16")}
+        credentials = {"username": "user1",
+                       "password": new_password.encode("utf16")}
         self.assertFalse(mozsvc.user.authenticate(request, credentials))
 
     def test_authenticate_with_unknown_username(self):
