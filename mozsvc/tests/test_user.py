@@ -38,10 +38,12 @@ import unittest
 
 from zope.interface import implements
 
+import pyramid.testing
+import pyramid.request
 from pyramid.interfaces import IRequestFactory, IAuthenticationPolicy
 from pyramid.authorization import ACLAuthorizationPolicy
+from pyramid.security import authenticated_userid
 from pyramid.request import Request
-import pyramid.testing
 
 import mozsvc.user
 
@@ -71,31 +73,27 @@ class HeaderAuthenticationPolicy(object):
         raise RuntimeError("tests shouldn't call this")  # pragma: nocover
 
 
-class UserTestCase(unittest.TestCase):
+class TestCaseHelpers(object):
+
+    DEFAULT_SETTINGS = {
+        'cef.vendor': 'mozilla',
+        'cef.device_version': '1.3',
+        'cef.product': 'weave',
+        'cef.use': True,
+        'cef.version': 0,
+        'cef.file': 'syslog',
+    }
 
     def setUp(self):
         self.config = pyramid.testing.setUp()
-        self.config.add_settings({
-            "auth.backend": "services.user.memory.MemoryUser",
-            'cef.vendor': 'mozilla',
-            'cef.device_version': '1.3',
-            'cef.product': 'weave',
-            'cef.use': True,
-            'cef.version': 0,
-            'cef.file': 'syslog',
-        })
-        self.config.include("mozsvc")
-        self.config.include("mozsvc.user")
-        self.config.set_authorization_policy(ACLAuthorizationPolicy())
-        self.config.set_authentication_policy(HeaderAuthenticationPolicy())
-        self.auth = self.config.registry["auth"]
-        self.auth.create_user("user1", "password1", "test@mozilla.com")
+        self.config.add_settings(self.DEFAULT_SETTINGS)
 
     def tearDown(self):
         pyramid.testing.tearDown()
 
     def _make_request(self, environ=None, factory=None):
         my_environ = {}
+        my_environ["wsgi.version"] = "1.0"
         my_environ["REQUEST_METHOD"] = "GET"
         my_environ["SCRIPT_NAME"] = ""
         my_environ["PATH_INFO"] = "/"
@@ -106,6 +104,22 @@ class UserTestCase(unittest.TestCase):
         request = factory(my_environ)
         request.registry = self.config.registry
         return request
+
+
+class UserTestCase(TestCaseHelpers, unittest.TestCase):
+
+    DEFAULT_SETTINGS = TestCaseHelpers.DEFAULT_SETTINGS.copy()
+    DEFAULT_SETTINGS.update({
+        "auth.backend": "services.user.memory.MemoryUser",
+    })
+
+    def setUp(self):
+        super(UserTestCase, self).setUp()
+        self.config.include("mozsvc.user")
+        self.config.set_authorization_policy(ACLAuthorizationPolicy())
+        self.config.set_authentication_policy(HeaderAuthenticationPolicy())
+        self.auth = self.config.registry["auth"]
+        self.auth.create_user("user1", "password1", "test@mozilla.com")
 
     def test_auth_backend_is_loaded(self):
         self.assertEquals(self.config.registry["auth"].__class__.__name__,
@@ -241,3 +255,92 @@ class UserTestCase(unittest.TestCase):
                           request.environ["mozsvc.user.registry"])
         del request.environ["mozsvc.user.registry"]
         self.assertRaises(AttributeError, getattr, request, "registry")
+
+
+class FakeAuthPlugin(object):
+    def authenticate(self, environ, identity):
+        raise RuntimeError("should not run")  # pragma: nocover
+
+
+class FakeIdentifierPlugin(object):
+    def identify(self, environ, identity):
+        raise RuntimeError("should not run")  # pragma: nocover
+
+
+class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
+
+    DEFAULT_SETTINGS = TestCaseHelpers.DEFAULT_SETTINGS.copy()
+    DEFAULT_SETTINGS.update({
+        "auth.backend": "services.user.memory.MemoryUser",
+    })
+
+    def setUp(self):
+        super(UserWhoAuthTestCase, self).setUp()
+        self.config.include("mozsvc.user.whoauth")
+        self.auth = self.config.registry["auth"]
+        self.auth.create_user("user1", "password1", "test@mozilla.com")
+
+    def test_that_basic_auth_is_used_by_default(self):
+        # With no who-specific settings, we get a backend authenticator
+        # and use basic-auth for identification and challenge.
+        authz = "Basic " + "user1:password1".encode("base64").strip()
+        req = self._make_request({
+            "HTTP_AUTHORIZATION": authz
+        })
+        self.assertEquals(authenticated_userid(req), "user1")
+        authz = "Basic " + "user1:WRONG".encode("base64").strip()
+        req = self._make_request({
+            "HTTP_AUTHORIZATION": authz
+        })
+        self.assertEquals(authenticated_userid(req), None)
+
+    def test_that_explicit_settings_are_not_overridden(self):
+        # Create a new config with some explicit who-auth settings.
+        config2 = pyramid.testing.setUp()
+        config2.add_settings(self.DEFAULT_SETTINGS)
+        config2.add_settings({
+            "who.authenticators.plugins": "fakeauth",
+            "who.identifiers.plugins": "fakeid",
+            "who.challengers.plugins": "fakeid",
+            "who.plugin.fakeauth.use":
+                "mozsvc.tests.test_user:FakeAuthPlugin",
+            "who.plugin.fakeid.use":
+                "mozsvc.tests.test_user:FakeIdentifierPlugin",
+        })
+        config2.include("mozsvc.user.whoauth")
+        config2.commit()
+        # Now poke at it to see what has been overridden.
+        policy = config2.registry.queryUtility(IAuthenticationPolicy)
+        api_factory = policy.api_factory
+        self.assertEquals(len(api_factory.authenticators), 1)
+        self.assertEquals(api_factory.authenticators[0][1].__class__.__name__,
+                          "FakeAuthPlugin")
+        self.assertEquals(len(api_factory.identifiers), 1)
+        self.assertEquals(api_factory.identifiers[0][1].__class__.__name__,
+                          "FakeIdentifierPlugin")
+
+    def test_graceful_handling_of_bad_auth_policy(self):
+        # This just re-tests the functionality from mozvsc.user, making
+        # sure that a non-repoze-who policy doesnt mess it up.
+        config2 = pyramid.testing.setUp(autocommit=False)
+        config2.add_settings(self.DEFAULT_SETTINGS)
+        config2.include("mozsvc.user.whoauth")
+        config2.set_authentication_policy(HeaderAuthenticationPolicy())
+        config2.commit()
+        request = self._make_request(factory=mozsvc.user.RequestWithUser)
+        self.assertFalse(request.user)
+        credentials = {"username": "user1", "password": "password1"}
+        mozsvc.user.authenticate(request, credentials)
+        self.assertEquals(request.user["username"], "user1")
+
+    def test_graceful_handling_of_other_request_objects(self):
+        authz = "Basic " + "user1:password1".encode("base64").strip()
+        req = self._make_request({
+            "HTTP_AUTHORIZATION": authz
+        }, factory=pyramid.request.Request)
+        # This makes the request available via get_current_request()
+        self.config.begin(request=req)
+        try:
+            self.assertEquals(authenticated_userid(req), "user1")
+        finally:
+            self.config.end()
