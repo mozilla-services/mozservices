@@ -44,11 +44,17 @@ Include mozsvc.user into your pyramid config to get the following niceties:
     * authenticated user's data as a dict at request.user
 
 You can also use the function mozsvc.user.authenticate(req, creds) as a
-shortcut for authenticating against the configured backend.
+shortcut for authenticating against the configured backend, which is useful
+for writing your own authentication plugins.
+
+This module is also designed to "play nice" with authentication schemes using
+repoze.who and the pyramid_whoauth package.  For example, the request.user
+attribute actually just exposes environ["repoze.who.identity"].  For some
+additional integration with pyramid_whoauth, see the mozsvc.user.whoauth
+module.
 
 """
 
-from pyramid.decorator import reify
 from pyramid.request import Request
 from pyramid.security import authenticated_userid
 
@@ -72,22 +78,73 @@ class RequestWithUser(Request):
     be an empty dict.  If the call to authenticated_userid() raises an error
     it will *not* be intercepted, you will receive it as an error from the
     attribute access attempt.
+
+    This class also provides some conveniences for integrating with repoze.who,
+    by storing the registry and user object in the WSGI environ rather than on
+    the request object itself.  This lets us write repoze.who plugins that can
+    access the higher-level pyramid config data.
     """
 
-    @reify
-    def user(self):
-        # Create an empty user dict and store it on the request.
-        # This makes it available for authenticated_userid to populate.
-        user = self.__dict__["user"] = {}
-        # Do the authentication through the standard pyramid interface.
-        username = authenticated_userid(self)
+    # Expose the "repoze.who.identity" dict as request.user.
+    # This allows for convenient integration between pyramid-level code
+    # and repoze.who plugins.
+
+    def _get_user(self):
+        # Return an existing identity if there is one.
+        user = self.environ.get("repoze.who.identity")
+        if user is not None:
+            return user
+
+        # Return an under-construction identity if there is one.
+        # This lets pyramid-level auth plugins store stuff in req.user.
+        user = self.environ.get("mozsvc.user.temp_user")
+        if user is not None:
+            return user
+
+        # Otherwise, we need to authenticate.
+        # Do it through the standard pyramid interface, while providing an
+        # under-construction user dict for plugins to scribble on.
+        extra = self.environ["mozsvc.user.temp_user"] = {}
+        try:
+            username = authenticated_userid(self)
+        finally:
+            self.environ.pop("mozsvc.user.temp_user", None)
+
+        # Now that we've authed, cached the result as repoze.who.identity.
+        # For a successful auth it might already exist.  For a failed auth
+        # we set it to the empty dict.
+        user = self.environ.get("repoze.who.identity")
+        if user is None:
+            user = self.environ["repoze.who.identity"] = {}
+
+        # If the auth was successful, make sure the identity contains
+        # all the expected keys.
         if username is not None:
-            user["username"] = username
-            # Suck in extra information from likely sources.
-            # Currently this just looks for a repoze.who identity dict.
-            if "repoze.who.identity" in self.environ:
-                user.update(self.environ["repoze.who.identity"])
+            user.update(extra)
+            user.setdefault("username", username)
+            user.setdefault("repoze.who.userid", username)
         return user
+
+    def _set_user(self, user):
+        self.environ["repoze.who.identity"] = user
+
+    user = property(_get_user, _set_user)
+
+    # Store the pyramid application registry in the WSGI environ.
+    # This allows repoze.who plugins to access pyramid config despite
+    # the fact that they aren't passed a request object.
+
+    def _get_registry(self):
+        try:
+            return self.environ["mozsvc.user.registry"]
+        except KeyError:
+            raise AttributeError("registry")
+
+    def _set_registry(self, registry):
+        self.environ["mozsvc.user.registry"] = registry
+        self.__dict__["registry"] = registry
+
+    registry = property(_get_registry, _set_registry)
 
 
 def authenticate(request, credentials, attrs=()):
@@ -111,7 +168,6 @@ def authenticate(request, credentials, attrs=()):
 
     # Ensure that we have credentials["username"] for use by the backend.
     # Some repoze.who plugins like to use "login" instead of "username".
-    # In the end, we must have credentials["username"].
     if "username" not in credentials:
         if "login" in credentials:
             credentials["username"] = credentials.pop("login")
@@ -149,8 +205,8 @@ def includeme(config):
     This function will set up user-handling via the mozsvc.user system.
     Things configured include:
 
-        * using RequestWithUser as the request object factory
-        * loading a user database backend from config section "auth"
+        * use RequestWithUser as the request object factory
+        * load a user database backend from config section "auth"
 
     """
     config.set_request_factory(RequestWithUser)

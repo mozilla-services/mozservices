@@ -219,11 +219,25 @@ class UserTestCase(unittest.TestCase):
                   })
         self.assertFalse(request.user)
 
-    def test_req_user_gets_info_from_repoze(self):
+    def test_req_user_exposes_repoze_who_identity(self):
+        # An existing r.w.i dict is exposed as req.user.
         request = self._make_request({
-                    "HTTP_X_USERNAME": "user1",
-                    "HTTP_X_PASSWORD": "password1",
                     "repoze.who.identity": {"repoze-was-ere": True},
                   })
-        self.assertEquals(request.user["username"], "user1")
         self.assertEquals(request.user["repoze-was-ere"], True)
+        # Setting a key in req.user also sets it in r.w.i.
+        request.user["testing"] = "testing"
+        self.assertEquals(request.environ["repoze.who.identity"]["testing"],
+                          "testing")
+        # Replacing req.user also replaces r.w.i
+        request.user = {"replacement": "text"}
+        self.assertEquals(request.environ["repoze.who.identity"].keys(),
+                          ["replacement"])
+
+    def test_registry_is_stored_in_environment(self):
+        request = self._make_request()
+        self.assertEquals(self.config.registry, request.registry)
+        self.assertEquals(self.config.registry,
+                          request.environ["mozsvc.user.registry"])
+        del request.environ["mozsvc.user.registry"]
+        self.assertRaises(AttributeError, getattr, request, "registry")
