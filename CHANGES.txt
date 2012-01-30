@@ -1,4 +1,10 @@
+0.1 - ????-??-??
+================
+
+- Update license to MPL 2.0
+
+
 0.1 - 2011-11-15
 ================
 
-Initial release.
+- Initial release.
