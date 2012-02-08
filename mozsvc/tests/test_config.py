@@ -6,8 +6,9 @@ import tempfile
 import os
 from StringIO import StringIO
 
-from mozsvc.config import (Config, EnvironmentNotFoundError, SettingsDict,
-                           load_into_settings, get_configurator)
+from mozsvc.exceptions import EnvironmentNotFoundError
+from mozsvc.config import (Config, SettingsDict, load_into_settings,
+                           get_configurator)
 
 
 _FILE_ONE = """\
