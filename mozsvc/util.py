@@ -4,6 +4,9 @@
 import time
 from decimal import Decimal, InvalidOperation
 
+from webob.dec import wsgify
+from webob import exc
+from pyramid.httpexceptions import HTTPException
 from pyramid.util import DottedNameResolver
 
 
@@ -54,3 +57,17 @@ def maybe_resolve_name(name_or_object, package=None):
     imports.  If not specified, only absolute paths will be supported.
     """
     return DottedNameResolver(package).maybe_resolve(name_or_object)
+
+
+class CatchErrors(object):
+    def __init__(self, app):
+        self.app = app
+        if hasattr(app, 'registry'):
+            self.registry = app.registry
+
+    @wsgify
+    def __call__(self, request):
+        try:
+            return request.get_response(self.app)
+        except (exc.HTTPException, HTTPException), e:
+            return e
