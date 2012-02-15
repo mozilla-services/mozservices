@@ -2,6 +2,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
+logger = logging.getLogger("mozsvc")
+
 
 def includeme(config):
     """Include the mozsvc defaults into a Pyramid application config.
@@ -13,4 +16,5 @@ def includeme(config):
 
     """
     config.add_route('heartbeat', '/__heartbeat__')
+    config.include('mozsvc.tweens')
     config.scan('mozsvc.views')
