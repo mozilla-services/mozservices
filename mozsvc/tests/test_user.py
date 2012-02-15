@@ -74,11 +74,38 @@ class TestCaseHelpers(object):
         return request
 
 
+class FakeAuthBackend(object):
+    """Auth backend to use for running the tests."""
+
+    def __init__(self):
+        self.users = {}
+
+    def create_user(self, username, password, email):
+        self.users[username] = [password, email]
+
+    def authenticate_user(self, user, credentials, attrs=None):
+        try:
+            username = credentials.get("username", user.get("username"))
+            if credentials["password"] == self.users[username][0]:
+                user.setdefault("username", username)
+                user.setdefault("mail", self.users[username][1])
+                return username
+        except KeyError:
+            pass
+        return None
+
+    def update_password(self, user, credentials, new_password):
+        username = self.authenticate_user(user, credentials)
+        if not username:
+            return False
+        self.users[username][0] = new_password
+
+
 class UserTestCase(TestCaseHelpers, unittest.TestCase):
 
     DEFAULT_SETTINGS = TestCaseHelpers.DEFAULT_SETTINGS.copy()
     DEFAULT_SETTINGS.update({
-        "auth.backend": "services.user.memory.MemoryUser",
+        "auth.backend": "mozsvc.tests.test_user:FakeAuthBackend",
     })
 
     def setUp(self):
@@ -91,7 +118,7 @@ class UserTestCase(TestCaseHelpers, unittest.TestCase):
 
     def test_auth_backend_is_loaded(self):
         self.assertEquals(self.config.registry["auth"].__class__.__name__,
-                          "MemoryUser")
+                          "FakeAuthBackend")
 
     def test_authenticate(self):
         request = self._make_request()
@@ -239,7 +266,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
 
     DEFAULT_SETTINGS = TestCaseHelpers.DEFAULT_SETTINGS.copy()
     DEFAULT_SETTINGS.update({
-        "auth.backend": "services.user.memory.MemoryUser",
+        "auth.backend": "mozsvc.tests.test_user:FakeAuthBackend",
     })
 
     def setUp(self):
