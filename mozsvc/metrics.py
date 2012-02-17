@@ -67,6 +67,14 @@ class MetlogHelper(object):
     def __init__(self):
         self._reset()
 
+        # Track any disabled 
+        self._disabled = {}
+
+    def is_disabled(self, name):
+        # Check if this particular logger is disabled
+        # TODO: @name indicates
+        return name in self._disabled
+
     def _reset(self):
         """ Reset the MetlogClientHelper to it's initial state"""
         self._client = None
@@ -81,7 +89,17 @@ class MetlogHelper(object):
 
         self._client = client
 
+    def metlog(self, *args, **kwargs):
+        return self._client.metlog(*args, **kwargs)
 
+    def timer(self, *args, **kwargs):
+        return self._client.timer(*args, **kwargs)
+
+    def incr(self, *args, **kwargs):
+        return self._client.incr(*args, **kwargs)
+
+
+# XXX: Do we really need this interface?
 class IMetlogHelper(Interface):
     """An empty interface for the MetlogHelper."""
     pass
@@ -89,7 +107,10 @@ class IMetlogHelper(Interface):
 
 class MetlogHelperPlugin(object):
     '''
-    Exposes a Metlog plugin for mozservices
+    Exposes a Metlog plugin for mozservices.
+
+    This class acts as a transparent proxy to a MetlogHelper instance
+    via the __getattr__ method call
     '''
     implements(IMetlogHelper)
 
@@ -104,19 +125,25 @@ class MetlogHelperPlugin(object):
         HELPER.set_client(MetlogClient(None))
 
         # Strip out the keys prefixed with 'sender_'
-        sender_keys = dict([(k.replace("sender_", ''), w) \
-                        for (k, w) in kwargs.items() \
+        sender_keys = dict([(k.replace("sender_", ''), v) \
+                        for (k, v) in kwargs.items() \
                         if k.startswith('sender_')])
 
         klass = resolve_name(sender_keys['backend'])
         del sender_keys['backend']
+
+        disabled_loggers = dict([(k.replace("disable_", ''), v) \
+                        for (k, v) in kwargs.items() \
+                        if (k.startswith('disable_') and v)])
+        self._disabled.update(disabled_loggers)
+
         HELPER._client.sender = klass(**sender_keys)
 
     def __getattr__(self, k):
         return getattr(HELPER, k)
 
 
-def rebind_dispatcher(method_name):
+def rebind_dispatcher(method_name, decorator_name=None):
     """
     Use this decorator to rebind a method to a class in the case that
     metrics is enabled.
@@ -132,8 +159,17 @@ def rebind_dispatcher(method_name):
         """
         @functools.wraps(func)
         def inner(*args, **kwargs):
+            
+            # This is a reference the class of the decorators.
+            # ie: incr_count or timeit
             klass = args[0].__class__
+
             if not HELPER._client:
+                # Get rid of the decorator behavior by binding the callable 
+                # into the decorator object instance so that getattr
+                setattr(klass, func.__name__, func)
+                return func(*args, **kwargs)
+            elif HELPER.is_disabled(decorator_name):
                 # Get rid of the decorator
                 setattr(klass, func.__name__, func)
                 return func(*args, **kwargs)
@@ -177,9 +213,9 @@ class SimpleLogger(object):
         This is a no-op method in case metlog is disabled
         '''
 
-    # TODO: would be nice to have a registration mechanism to 'attach'
-    # the debug, info, warn, error, etc... methods through some kind
-    # of callback mechanism at runtime
+    # TODO: The standard python logger style method (debug, info,
+    # warn, ...) can be replaced with the metlog extension mechanism
+    # using add_method
 
     def debug(self, msg):
         self._log(msg, SEVERITY.DEBUG)
@@ -202,10 +238,10 @@ class SimpleLogger(object):
 
 class MetricsDecorator(object):
     """
-    This class is used to store some metadata about
-    the decorated function.  This is needed since if you stack
-    decorators, you'll lose the name of the underlying function that
-    is being logged.  Mostly, we just care about the function name.
+    This is a base class used to store some metadata about the
+    decorated function.  This is needed since if you stack decorators,
+    you'll lose the name of the underlying function that is being
+    logged.  Mostly, we just care about the function name.
     """
     def __init__(self, fn):
         self._fn = fn
@@ -243,7 +279,7 @@ class incr_count(MetricsDecorator):
         try:
             result = self._invoke(*args, **kwargs)
         finally:
-            HELPER._client.incr(self._method_name, count=1)
+            HELPER.incr(self._method_name, count=1)
         return result
 
 
@@ -257,12 +293,12 @@ class timeit(MetricsDecorator):
     def __init__(self, fn):
         MetricsDecorator.__init__(self, fn)
 
-    @rebind_dispatcher('metlog_call')
+    @rebind_dispatcher('metlog_call', decorator_name='timeit')
     def __call__(self, *args, **kwargs):
         return self._invoke(*args, **kwargs)
 
     def metlog_call(self, *args, **kwargs):
-        with HELPER._client.timer(self._method_name):
+        with HELPER.timer(self._method_name):
             return self._invoke(*args, **kwargs)
 
 
@@ -352,7 +388,7 @@ def apache_log(fn):
                 webserv_log['threadlocal'] = get_tlocal()
             else:
                 webserv_log['threadlocal'] = None
-            HELPER._client.metlog('wsgi', fields=webserv_log)
+            HELPER.metlog('wsgi', fields=webserv_log)
 
         result = None
 
