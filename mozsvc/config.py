@@ -15,16 +15,10 @@ from ConfigParser import RawConfigParser, Error
 
 from pyramid.config import Configurator
 
+from mozsvc.exceptions import EnvironmentNotFoundError
+
 _IS_NUMBER = re.compile('^-?[0-9].*')
 _IS_ENV_VAR = re.compile('\$\{(\w.*)?\}')
-
-
-class EnvironmentNotFoundError(Error):
-    """Raised when an environment variable is not found"""
-
-    def __init__(self, varname):
-        Error.__init__(self, 'Variable not found %r' % varname)
-        self.varname = varname
 
 
 def convert(value):

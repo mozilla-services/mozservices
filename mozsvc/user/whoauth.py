@@ -50,9 +50,9 @@ class BackendAuthPlugin(object):
 def configure_who_defaults(config):
     """Configure default settings for authentication via repoze.who.
 
-    This function takes a Configurator containing a pyramid_whoauth authn
-    policy, and applies some default settings to authenticate against the
-    configured user database backend.  Specifically:
+    This function takes a Configurator object using pyramid_whoauth and
+    applies some default settings to authenticate against the configured
+    user database backend.  Specifically:
 
         * if no authenticators are configured, create one to authenticate
           against the user database backend.
@@ -63,22 +63,25 @@ def configure_who_defaults(config):
     Eventually this will introspect the backend and add plugins for each auth
     scheme that it supports.
     """
-    # Due to the way pyramid's configurator handles conflict resolution,
-    # it's entirely possible for this to be called when there's no suitable
-    # authentication policy.  Handle such situations gracefully.
-    try:
-        authn_policy = config.registry.queryUtility(IAuthenticationPolicy)
-        api_factory = authn_policy.api_factory
-    except AttributeError:
-        return
-    # If there are no authenticators, set one up using the backend.
-    if not api_factory.authenticators:
-        api_factory.authenticators.append(("backend", BackendAuthPlugin()))
-    # If there are no identifiers and no challengers, set up basic auth.
-    if not api_factory.identifiers and not api_factory.challengers:
-        basic = BasicAuthPlugin(realm="Sync")
-        api_factory.identifiers.append(("basic", basic))
-        api_factory.challengers.append(("basic", basic))
+    settings = config.registry.settings
+    # Add settings for a plugin named "backend".
+    BACKENDAUTH_DEFAULTS = {
+        "use": "mozsvc.user.whoauth:BackendAuthPlugin"
+    }
+    for key, value in BACKENDAUTH_DEFAULTS.iteritems():
+        settings.setdefault("who.plugin.backend." + key, value)
+    # Add settings for a plugin named "basicauth".
+    BASICAUTH_DEFAULTS = {
+        "use": "repoze.who.plugins.basicauth:make_plugin",
+        "realm": "Sync",
+    }
+    for key, value in BASICAUTH_DEFAULTS.iteritems():
+        settings.setdefault("who.plugin.basic." + key, value)
+    # Use "backend" as the default authenticator.
+    settings.setdefault("who.authenticators.plugins", "backend")
+    # Use "basic" as the default identifier and challenger.
+    settings.setdefault("who.identifiers.plugins", "basic")
+    settings.setdefault("who.challengers.plugins", "basic")
 
 
 def includeme(config):
@@ -86,10 +89,8 @@ def includeme(config):
     # If already included then this is a no-op.
     config.include("mozsvc.user")
 
+    # Set sensible default settings for whoauth.
+    configure_who_defaults(config)
+
     # Use pyramid_whoauth for the authentication.
     config.include("pyramid_whoauth")
-
-    # Use a callback to set sensible defaults at config commit time.
-    def do_configure_who_defaults():
-        configure_who_defaults(config)
-    config.action(None, do_configure_who_defaults, order=PHASE2_CONFIG)
