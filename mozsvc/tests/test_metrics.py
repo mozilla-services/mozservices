@@ -6,16 +6,20 @@ from mozsvc.config import Config
 from mozsvc.exceptions import MethodNotFoundError
 from mozsvc.metrics import IMetlogHelper
 from mozsvc.metrics import MetlogHelperPlugin
+
 from mozsvc.metrics import apache_log
+
 from mozsvc.metrics import clear_tlocal
 from mozsvc.metrics import get_tlocal
 from mozsvc.metrics import has_tlocal
-from mozsvc.metrics import incr_count
-from mozsvc.metrics import logger, HELPER
-from mozsvc.metrics import rebind_dispatcher
+
+from metlog.decorators import incr_count
+from metlog.decorators import timeit
+
+from metlog.decorators.base import CLIENT_WRAPPER
+
 from mozsvc.metrics import set_tlocal
 from mozsvc.metrics import thread_context
-from mozsvc.metrics import timeit
 from mozsvc.metrics import MetricsService
 from mozsvc.plugin import load_and_register
 from pyramid.config import Configurator
@@ -24,6 +28,7 @@ from webob.request import Request
 from zope.interface.verify import verifyObject
 import exceptions
 import unittest
+import json
 
 
 class TestMetrics(unittest.TestCase):
@@ -33,7 +38,7 @@ class TestMetrics(unittest.TestCase):
         [test1]
         enabled=true
         backend = mozsvc.metrics.MetlogHelperPlugin
-        sender_backend=metlog.senders.ZmqPubSender
+        sender_class=metlog.senders.ZmqPubSender
         sender_bindstrs=tcp://localhost:5585
                         tcp://localhost:5586
 
@@ -66,7 +71,7 @@ class TestConfigurationLoading(unittest.TestCase):
         [test1]
         enabled=true
         backend = mozsvc.metrics.MetlogHelperPlugin
-        sender_backend=metlog.senders.DebugCaptureSender
+        sender_class=metlog.senders.DebugCaptureSender
         """)))
         settings = {"config": config}
         config = Configurator(settings=settings)
@@ -87,7 +92,7 @@ class TestConfigurationLoading(unittest.TestCase):
         assert result == 11
         assert len(plugin._client.sender.msgs) == 1
 
-        obj = plugin._client.sender.msgs[0]
+        obj = json.loads(plugin._client.sender.msgs[0])
 
         expected = 'mozsvc.tests.test_metrics:target_callable'
         actual = obj['fields']['name']
@@ -104,7 +109,7 @@ class TestConfigurationLoading(unittest.TestCase):
             return x + y
 
         result = new_target_callable(5, 6)
-        msgs = plugin._client.sender.msgs
+        msgs = [json.loads(m) for m in plugin._client.sender.msgs]
         assert len(msgs) == 2
 
         # Names should be preserved
@@ -127,7 +132,7 @@ class TestCannedDecorators(unittest.TestCase):
         [test1]
         enabled=true
         backend = mozsvc.metrics.MetlogHelperPlugin
-        sender_backend=metlog.senders.DebugCaptureSender
+        sender_class=metlog.senders.DebugCaptureSender
         """)))
         settings = {"config": config}
         config = Configurator(settings=settings)
@@ -150,7 +155,7 @@ class TestCannedDecorators(unittest.TestCase):
             return x + y
 
         ordering_1(5, 6)
-        msgs = plugin._client.sender.msgs
+        msgs = [json.loads(m) for m in plugin._client.sender.msgs]
         assert len(msgs) == 2
 
         for msg in msgs:
@@ -172,7 +177,7 @@ class TestCannedDecorators(unittest.TestCase):
             return x + y
 
         ordering_2(5, 6)
-        msgs = plugin._client.sender.msgs
+        msgs = [json.loads(m) for m in plugin._client.sender.msgs]
         assert len(msgs) == 2
 
         for msg in msgs:
@@ -184,12 +189,6 @@ class TestCannedDecorators(unittest.TestCase):
         # ordering of decoration
         assert msgs[0]['type'] == 'counter'
         assert msgs[1]['type'] == 'timer'
-
-    def test_reset_helper(self):
-        plugin = self.plugin
-        assert isinstance(plugin._client, MetlogClient)
-        plugin.set_client(None)
-        assert plugin._client == None
 
     def test_apache_logger(self):
 
@@ -208,8 +207,7 @@ class TestCannedDecorators(unittest.TestCase):
                        'SERVER_PORT': 80,
                        })
         some_method(req)
-        msg = plugin._client.sender.msgs
-        msg = msgs[0]
+        msg = json.loads(plugin._client.sender.msgs[0])
         assert 'foo' in msg['fields']['threadlocal']
         assert msg['fields']['threadlocal']['foo'] == 'bar'
 
@@ -231,7 +229,7 @@ class TestCannedDecorators(unittest.TestCase):
         get_info(req)
 
         plugin = self.plugin
-        msgs = plugin._client.sender.msgs
+        msgs = [json.loads(m) for m in plugin._client.sender.msgs]
         assert len(msgs) == 3
         assert 'counter' in [m['type'] for m in msgs]
         assert 'timer' in [m['type'] for m in msgs]
@@ -253,85 +251,8 @@ class TestDisabledMetrics(unittest.TestCase):
     def test_verify_disabled(self):
         assert self.plugin._client == None
 
-    def test_no_rebind(self):
-        # Test that rebinding of methods doesn't occur if metlog is
-        # completely disabled
-        class SomeClass(object):
-            @rebind_dispatcher('rebind_method')
-            def mymethod(self, x, y):
-                return x * y
-
-            def rebind_method(self, x, y):
-                return x - y
-        obj = SomeClass()
-        assert obj.mymethod(5, 6) == 30
 
 
-class TestRebindMethods(unittest.TestCase):
-    def setUp(self):
-        config = Config(StringIO(dedent("""
-        [test1]
-        enabled=true
-        backend = mozsvc.metrics.MetlogHelperPlugin
-        sender_backend=metlog.senders.DebugCaptureSender
-        """)))
-        settings = {"config": config}
-        config = Configurator(settings=settings)
-        self.plugin = load_and_register("test1", config)
-        config.commit()
-
-    def test_bad_rebind(self):
-        try:
-
-            class BarClass(object):
-                @rebind_dispatcher('bad_rebind')
-                def mymethod(self, x, y):
-                    return x * y
-
-                def foo(self, x, y):
-                    pass
-
-            foo = BarClass()
-            foo.mymethod(5, 6)
-            raise exceptions.AssertionError(\
-                    'Class definition should have failed.')
-        except MethodNotFoundError, mnfe:
-            assert mnfe.args[0].startswith("No such method")
-
-
-class TestSimpleLogger(unittest.TestCase):
-    def setUp(self):
-        config = Config(StringIO(dedent("""
-        [test1]
-        enabled=true
-        backend = mozsvc.metrics.MetlogHelperPlugin
-        sender_backend=metlog.senders.DebugCaptureSender
-        """)))
-        settings = {"config": config}
-        config = Configurator(settings=settings)
-        self.plugin = load_and_register("test1", config)
-        config.commit()
-
-    def test_oldstyle_logger(self):
-        msgs = [(SEVERITY.DEBUG, 'debug', logger.debug),
-        (SEVERITY.INFORMATIONAL, 'info', logger.info),
-        (SEVERITY.WARNING, 'warn', logger.warn),
-        (SEVERITY.ERROR, 'error', logger.error),
-        (SEVERITY.ALERT, 'exception', logger.exception),
-        (SEVERITY.CRITICAL, 'critical', logger.critical)]
-
-        for lvl, msg, method in msgs:
-            method("some %s" % msg)
-            msgs = HELPER._client.sender.msgs
-
-            assert len(msgs) == 1
-            timer_call = msgs[0]
-            assert timer_call['logger'] == 'anonymous'
-            assert timer_call['type'] == 'oldstyle'
-            assert timer_call['payload'] == 'some %s' % msg
-            assert timer_call['severity'] == lvl
-
-            HELPER._client.sender.msgs.clear()
 
 
 class TestThreadLocal(unittest.TestCase):
