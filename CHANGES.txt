@@ -1,7 +1,11 @@
-0.1 - ????-??-??
+0.2 - ????-??-??
 ================
 
-- Update license to MPL 2.0
+- Updated license to MPL 2.0
+- Added mozsvc.user for easy access to auth backends and user data.
+- Added mozsvc.http_helpers for dealing with other HTTP services.
+- Added a tween that turns BackendErrors into HTTP 503 responses.
+- Added some testing helper functions.
 
 
 0.1 - 2011-11-15

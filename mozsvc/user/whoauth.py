@@ -11,9 +11,12 @@ from zope.interface import implements
 
 from repoze.who.interfaces import IAuthenticator
 from repoze.who.plugins.basicauth import BasicAuthPlugin
+from repoze.who.plugins.macauth import MACAuthPlugin
 
-from pyramid.interfaces import IAuthenticationPolicy, PHASE2_CONFIG
 from pyramid.threadlocal import get_current_request
+
+import tokenlib
+import tokenlib.secrets
 
 import mozsvc.user
 
@@ -37,6 +40,10 @@ class BackendAuthPlugin(object):
             request = mozsvc.user.RequestWithUser(environ)
         else:
             request = get_current_request()
+        # Mark the user object as "under construction".
+        # Otherwise when the call to mozsvc.user.authenticate() tries to
+        # access request.user, it will recurse back into this function.
+        environ.setdefault("mozsvc.user.temp_user", {})
         # Authenticate against the backend.  This has the side-effect of
         # setting identity["username"] to the authenticated username.
         if not mozsvc.user.authenticate(request, identity):
@@ -44,38 +51,123 @@ class BackendAuthPlugin(object):
         return identity["username"]
 
 
+class SagradaMACAuthPlugin(MACAuthPlugin):
+    """MAC Auth plugin designed for use with Sagrada auth tokens.
+
+    This is a repoze.who IIdentifier/IAuthenticator/IChallenger that
+    consumes Sagrada authentication tokens as described here:
+
+        https://wiki.mozilla.org/Services/Sagrada/TokenServer
+
+    For verification of token signatures, this plugin can use either a
+    single fixed secret (via the argument 'secret') or a file mapping
+    node hostnames to secrets (via the argument 'secrets_file').  The
+    two arguments are mutually exclusive.
+    """
+
+    def __init__(self, secret=None, secrets_file=None, **kwds):
+        if secret is not None and secrets_file is not None:
+            msg = "Can only specify one of 'secrets' or 'secrets_file'"
+            raise ValueError(msg)
+        if secrets_file is not None:
+            self.secret = None
+            self.secrets = tokenlib.secrets.Secrets(secrets_file)
+        else:
+            self.secret = secret
+            self.secrets = None
+        super(SagradaMACAuthPlugin, self).__init__(**kwds)
+
+    def decode_mac_id(self, request, id):
+        """Decode the MAC id into its secret key and dict of user data.
+
+        This method determines the appropriate secrets to use for the given
+        request, then passes them on to tokenlib to handle the given MAC id
+        token.
+
+        If the id is invalid then ValueError will be raised.
+        """
+        # There might be multiple secrets in use, if we're in the
+        # process of transitioning from one to another.  Try each
+        # until we find one that works.
+        secrets = self._get_token_secrets(request)
+        for secret in secrets:
+            try:
+                data = tokenlib.parse_token(id, secret=secret)
+                key = tokenlib.get_token_secret(id, secret=secret)
+                break
+            except ValueError:
+                pass
+        else:
+            raise ValueError("invalid MAC id")
+        return key, data
+
+    def encode_mac_id(self, request, data):
+        """Encode the given data into a MAC id and secret key.
+
+        This method is essentially the reverse of decode_mac_id.  It is
+        not needed for consuming authentication tokens, but is very useful
+        when building them for testing purposes.
+        """
+        # There might be multiple secrets in use, if we're in the
+        # process of transitioning from one to another.  Always use
+        # the last one aka the "most recent" secret.
+        secret = self._get_token_secrets(request)[-1]
+        id = tokenlib.make_token(data, secret=secret)
+        key = tokenlib.get_token_secret(id, secret=secret)
+        return id, key
+
+    def _get_token_secrets(self, request):
+        """Get the list of possible secrets for signing tokens."""
+        if self.secrets is None:
+            return [self.secret]
+        return self.secrets.get(request.host)
+
+
 def configure_who_defaults(config):
     """Configure default settings for authentication via repoze.who.
 
-    This function takes a Configurator containing a pyramid_whoauth authn
-    policy, and applies some default settings to authenticate against the
-    configured user database backend.  Specifically:
+    This function takes a Configurator object using pyramid_whoauth and
+    applies some default settings to authenticate against the configured
+    user database backend.  Specifically:
 
-        * if no authenticators are configured, create one to authenticate
-          against the user database backend.
+        * add a plugin to identify/challenge/authenticate using Sagrada
+          MAC Auth tokens.
 
-        * if no identifiers or challengers are configured, create a
-          basic-auth plugin and use it.
+        * if there is a configured authentication backend, add a plugin to
+          authenticate against it.
 
-    Eventually this will introspect the backend and add plugins for each auth
-    scheme that it supports.
+        * if there is a configured authentication backend, add a plugin to
+          identify/challenge using HTTP Basic Auth.
+
+    All of these defaults may be overridden in the application config file.
     """
-    # Due to the way pyramid's configurator handles conflict resolution,
-    # it's entirely possible for this to be called when there's no suitable
-    # authentication policy.  Handle such situations gracefully.
-    try:
-        authn_policy = config.registry.queryUtility(IAuthenticationPolicy)
-        api_factory = authn_policy.api_factory
-    except AttributeError:
-        return
-    # If there are no authenticators, set one up using the backend.
-    if not api_factory.authenticators:
-        api_factory.authenticators.append(("backend", BackendAuthPlugin()))
-    # If there are no identifiers and no challengers, set up basic auth.
-    if not api_factory.identifiers and not api_factory.challengers:
-        basic = BasicAuthPlugin(realm="Sync")
-        api_factory.identifiers.append(("basic", basic))
-        api_factory.challengers.append(("basic", basic))
+    settings = config.registry.settings
+    BACKENDAUTH_DEFAULTS = {
+        "use": "mozsvc.user.whoauth:BackendAuthPlugin"
+    }
+    for key, value in BACKENDAUTH_DEFAULTS.iteritems():
+        settings.setdefault("who.plugin.backend." + key, value)
+    BASICAUTH_DEFAULTS = {
+        "use": "repoze.who.plugins.basicauth:make_plugin",
+        "realm": "Sync",
+    }
+    for key, value in BASICAUTH_DEFAULTS.iteritems():
+        settings.setdefault("who.plugin.basicauth." + key, value)
+    MACAUTH_DEFAULTS = {
+        "use": "mozsvc.user.whoauth:SagradaMACAuthPlugin",
+    }
+    for key, value in MACAUTH_DEFAULTS.iteritems():
+        settings.setdefault("who.plugin.macauth." + key, value)
+    # If there is an auth backend, enable basicauth by default.
+    # Enable macauth by default regardless, since it doesn't need a backend.
+    if config.registry.get("auth") is not None:
+        settings.setdefault("who.authenticators.plugins", "backend macauth")
+        settings.setdefault("who.identifiers.plugins", "basicauth macauth")
+        settings.setdefault("who.challengers.plugins", "basicauth macauth")
+    else:
+        settings.setdefault("who.authenticators.plugins", "macauth")
+        settings.setdefault("who.identifiers.plugins", "macauth")
+        settings.setdefault("who.challengers.plugins", "macauth")
 
 
 def includeme(config):
@@ -83,10 +175,8 @@ def includeme(config):
     # If already included then this is a no-op.
     config.include("mozsvc.user")
 
+    # Set sensible default settings for whoauth.
+    configure_who_defaults(config)
+
     # Use pyramid_whoauth for the authentication.
     config.include("pyramid_whoauth")
-
-    # Use a callback to set sensible defaults at config commit time.
-    def do_configure_who_defaults():
-        configure_who_defaults(config)
-    config.action(None, do_configure_who_defaults, order=PHASE2_CONFIG)
