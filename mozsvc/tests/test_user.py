@@ -6,6 +6,7 @@
 # ***** END LICENSE BLOCK *****
 
 import unittest
+import tempfile
 
 from zope.interface import implements
 
@@ -15,6 +16,9 @@ from pyramid.interfaces import IRequestFactory, IAuthenticationPolicy
 from pyramid.authorization import ACLAuthorizationPolicy
 from pyramid.security import authenticated_userid
 from pyramid.request import Request
+
+import tokenlib
+import macauthlib
 
 import mozsvc.user
 
@@ -62,18 +66,23 @@ class TestCaseHelpers(object):
     def tearDown(self):
         pyramid.testing.tearDown()
 
-    def _make_request(self, environ=None, factory=None):
+    def _make_request(self, environ=None, factory=None, config=None):
         my_environ = {}
         my_environ["wsgi.version"] = "1.0"
+        my_environ["wsgi.url_scheme"] = "http"
         my_environ["REQUEST_METHOD"] = "GET"
         my_environ["SCRIPT_NAME"] = ""
         my_environ["PATH_INFO"] = "/"
+        my_environ["SERVER_NAME"] = "localhost"
+        my_environ["SERVER_PORT"] = "80"
         if environ is not None:
             my_environ.update(environ)
+        if config is None:
+            config = self.config
         if factory is None:
-            factory = self.config.registry.getUtility(IRequestFactory)
+            factory = config.registry.getUtility(IRequestFactory)
         request = factory(my_environ)
-        request.registry = self.config.registry
+        request.registry = config.registry
         return request
 
 
@@ -292,6 +301,42 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
         })
         self.assertEquals(authenticated_userid(req), None)
 
+    def test_that_macauth_is_used_by_default(self):
+        # Grab the MACAuth plugin so we can sign requests.
+        policy = self.config.registry.queryUtility(IAuthenticationPolicy)
+        api_factory = policy.api_factory
+        mac_plugin = api_factory.authenticators[1][1]
+        # Generate signed request.
+        req = self._make_request()
+        id, key = mac_plugin.encode_mac_id(req, {"userid": 42})
+        macauthlib.sign_request(req, id, key)
+        # That should be enough to authenticate.
+        self.assertEquals(authenticated_userid(req), 42)
+        # Check that it rejects invalid MAC ids.
+        req = self._make_request()
+        macauthlib.sign_request(req, id, key)
+        authz = req.environ["HTTP_AUTHORIZATION"]
+        req.environ["HTTP_AUTHORIZATION"] = authz.replace(id, "XXX" + id)
+        self.assertRaises(Exception, authenticated_userid, req)
+
+    def test_that_basic_auth_is_not_used_when_theres_no_backend(self):
+        config2 = pyramid.testing.setUp()
+        config2.add_settings(self.DEFAULT_SETTINGS)
+        del config2.registry.settings["auth.backend"]
+        config2.include("mozsvc.user.whoauth")
+        config2.commit()
+        # There should be no backend.
+        self.assertEquals(config2.registry.get("auth"), None)
+        # The policy should have only macauth.
+        policy = config2.registry.queryUtility(IAuthenticationPolicy)
+        api_factory = policy.api_factory
+        self.assertEquals(len(api_factory.authenticators), 1)
+        self.assertEquals(api_factory.authenticators[0][1].__class__.__name__,
+                          "SagradaMACAuthPlugin")
+        self.assertEquals(len(api_factory.identifiers), 1)
+        self.assertEquals(api_factory.identifiers[0][1].__class__.__name__,
+                          "SagradaMACAuthPlugin")
+
     def test_that_explicit_settings_are_not_overridden(self):
         # Create a new config with some explicit who-auth settings.
         config2 = pyramid.testing.setUp()
@@ -342,3 +387,67 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             self.assertEquals(authenticated_userid(req), "user1")
         finally:
             self.config.end()
+
+    def test_that_macauth_cant_use_both_secret_and_secrets_file(self):
+        config2 = pyramid.testing.setUp()
+        config2.add_settings(self.DEFAULT_SETTINGS)
+        config2.add_settings({
+            "who.plugin.macauth.secret": "DARTH VADER IS LUKE'S FATHER",
+            "who.plugin.macauth.secrets_file": "/dev/null",
+        })
+        self.assertRaises(ValueError, config2.include, "mozsvc.user.whoauth")
+
+    def test_that_macauth_can_use_per_node_hostname_secrets(self):
+        with tempfile.NamedTemporaryFile() as sf:
+            # Write some secrets to a file.
+            sf.write("host1,0001:secret11,0002:secret12\n")
+            sf.write("host2,0001:secret21,0002:secret22\n")
+            sf.flush()
+            # Configure the plugin to load them.
+            config2 = pyramid.testing.setUp()
+            config2.add_settings(self.DEFAULT_SETTINGS)
+            config2.add_settings({
+                "who.plugin.macauth.secrets_file": sf.name,
+            })
+            config2.include("mozsvc.user.whoauth")
+            config2.commit()
+            # It should accept a request signed with the old secret on host1.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host1",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret11")
+            key = tokenlib.get_token_secret(id, secret="secret11")
+            macauthlib.sign_request(req, id, key)
+            self.assertEquals(authenticated_userid(req), 42)
+            # It should accept a request signed with the new secret on host1.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host1",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            key = tokenlib.get_token_secret(id, secret="secret12")
+            macauthlib.sign_request(req, id, key)
+            self.assertEquals(authenticated_userid(req), 42)
+            # It should reject a request signed with secret from other host.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host2",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            key = tokenlib.get_token_secret(id, secret="secret12")
+            macauthlib.sign_request(req, id, key)
+            self.assertRaises(Exception, authenticated_userid, req)
+            # It should accept a request signed with the new secret on host2.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host2",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            key = tokenlib.get_token_secret(id, secret="secret22")
+            macauthlib.sign_request(req, id, key)
+            self.assertEquals(authenticated_userid(req), 42)
+            # It should reject unknown hostnames.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host3",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            key = tokenlib.get_token_secret(id, secret="secret12")
+            macauthlib.sign_request(req, id, key)
+            self.assertRaises(Exception, authenticated_userid, req)
