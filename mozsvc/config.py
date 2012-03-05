@@ -207,7 +207,7 @@ class SettingsDict(dict):
         returns those values in a dict.  The section name is removed from
         each key.  For example::
 
-            >>> c = SettingsDict({"a.one": 1, "a.two": 2, "b.three: 3})
+            >>> c = SettingsDict({"a.one": 1, "a.two": 2, "b.three": 3})
             >>> c.getsection("a")
             {"one": 1, "two", 2}
             >>>
