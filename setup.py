@@ -10,7 +10,7 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
 requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson',
-            'metlog[zeromqpub]']
+            'metlog-py[zeromqpub]']
 
 setup(name='mozsvc',
       version='0.1',
