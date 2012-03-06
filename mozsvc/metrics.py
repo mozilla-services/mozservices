@@ -1,8 +1,12 @@
 # ***** BEGIN LICENSE BLOCK *****
 # This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file,
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Contributor(s):
+#   Victor Ng (vng@mozilla.com)
+#   Rob Miller (rmiller@mozilla.com)
+#
 # ***** END LICENSE BLOCK *****
 """
 Utility functions to instantiate the metrics logger from the sync
@@ -18,36 +22,29 @@ import cornice
 import threading
 
 
-class MetlogHelperPlugin(object):
-    '''
-    Exposes a Metlog plugin for mozservices.
-
-    This class acts as a transparent proxy to a MetlogHelper instance
-    via the __getattr__ method call
-    '''
-    def __init__(self, **kwargs):
-        # Disable metrics by default
-
-        if not kwargs['enabled']:
-            # Metrics are disabled
-            self._client = None
-            return
-
-        disabled_decorators = dict([(k.replace("disable_", ''), v) \
-                        for (k, v) in kwargs.items() \
-                        if (k.startswith('disable_') and v)])
-
-        metlog_config = dict([(k.replace('sender_', ''), w) \
-                for k, w in kwargs.items() if k.startswith("sender_")])
-
-        self._client = client_from_dict_config({'sender': metlog_config})
-        CLIENT_WRAPPER.activate(self._client, disabled_decorators)
-
-    def __getattr__(self, k):
-        return getattr(CLIENT_WRAPPER, k)
-
-
 _LOCAL_STORAGE = threading.local()
+
+
+def setup_metlog(config_dict):
+    """
+    Instantiate the Metlog client and set up the client wrapper.
+
+    :param config_dict: Dictionary object containing the metlog client
+                        configuration.
+    """
+    client = client_from_dict_config(config_dict)
+    disabled_decorators = dict([(k.replace("disable_", ''), v)
+                                for (k, v) in config_dict.items()
+                                if (k.startswith('disable_') and v)])
+    CLIENT_WRAPPER.activate(client, disabled_decorators)
+
+
+def get_metlog_client():
+    """
+    Return the currently configured Metlog client. Will not work until
+    `setup_metlog` has been called to initialize the client wrapper.
+    """
+    return CLIENT_WRAPPER.client
 
 
 @contextmanager
