@@ -11,7 +11,7 @@ https://wiki.mozilla.org/index.php?title=Services/Sync/Server/GlobalConfFile
 """
 import re
 import os
-from ConfigParser import RawConfigParser, Error
+from ConfigParser import RawConfigParser
 
 from pyramid.config import Configurator
 
