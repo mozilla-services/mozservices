@@ -10,7 +10,8 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
 requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson', 'cef',
-            'repoze.who', 'repoze.who.plugins.macauth', 'pyramid_whoauth',
+            'unittest2', 'WebTest', 'WSGIProxy', 'repoze.who',
+            'repoze.who.plugins.macauth', 'pyramid_whoauth',
             'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]']
 
 setup(name='mozsvc',

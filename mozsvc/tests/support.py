@@ -3,9 +3,15 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
+import sys
+import unittest2
+import urlparse
 
 from pyramid.request import Request
 from pyramid.interfaces import IRequestFactory
+
+from webtest import TestApp
+from wsgiproxy.app import WSGIProxyApp
 
 from mozsvc.config import get_configurator
 
@@ -56,3 +62,44 @@ def make_request(config, path="/", environ=None, factory=None):
     request = factory(my_environ)
     request.registry = config.registry
     return request
+
+
+class FunctionalTestCase(unittest2.TestCase):
+    """TestCase for writing functional tests using WebTest.
+
+    This TestCase subclass provides an easy mechanism to write functional
+    tests using WebTest.  It exposes a TestApp instance as self.app.
+
+    If the environment variable MOZSVC_TEST_REMOTE is set to a URL, then
+    self.app will be a WSGIProxy application that forwards all requests to
+    that server.  This allows the functional tests to be easily run against
+    a live server instance.
+    """
+
+    def setUp(self):
+        # Load config from the .ini file.
+        # The file to use may be specified in the environment.
+        self.ini_file = os.environ.get("MOZSVC_TEST_INI_FILE", "tests.ini")
+        __file__ = sys.modules[self.__class__.__module__].__file__
+        self.config = get_test_configurator(__file__, self.ini_file)
+        self.config.include("syncstorage")
+
+        # Test against a live server if instructed so by the environment.
+        # Otherwise, test against an in-process WSGI application.
+        test_remote = os.environ.get("MOZSVC_TEST_REMOTE")
+        if not test_remote:
+            self.distant = False
+            self.host_url = "http://localhost:5000"
+            application = self.config.make_wsgi_app()
+        else:
+            self.distant = True
+            self.host_url = test_remote
+            application = WSGIProxyApp(test_remote)
+
+        host_url = urlparse.urlparse(self.host_url)
+        self.app = TestApp(application, extra_environ={
+            "HTTP_HOST": host_url.netloc,
+            "wsgi.url_scheme": host_url.scheme or "http",
+            "SERVER_NAME": host_url.hostname,
+            "REMOTE_ADDR": "127.0.0.1",
+        })
