@@ -19,9 +19,9 @@ from repoze.who.plugins.macauth import MACAuthPlugin
 from pyramid.threadlocal import get_current_request
 
 import tokenlib
-import tokenlib.secrets
 
 import mozsvc.user
+import mozsvc.secrets
 
 
 class BackendAuthPlugin(object):
@@ -74,7 +74,7 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
             raise ValueError(msg)
         if secrets_file is not None:
             self.secret = None
-            self.secrets = tokenlib.secrets.Secrets(secrets_file)
+            self.secrets = mozsvc.secrets.Secrets(secrets_file)
         else:
             self.secret = secret
             self.secrets = None
