@@ -15,8 +15,8 @@
 # ***** END LICENSE BLOCK *****
 
 from StringIO import StringIO
+from metlog.decorators import timeit, incr_count
 from mozsvc.config import Config
-from mozsvc.metrics import timeit, incr_count
 from mozsvc.plugin import load_and_register
 from pyramid.config import Configurator
 from textwrap import dedent
@@ -33,7 +33,7 @@ class TestDisabledTimers(unittest.TestCase):
         config = Config(StringIO(dedent("""
         [test1]
         enabled=true
-        backend = mozsvc.metrics.MetlogHelperPlugin
+        backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         disable_timeit=true
         """)))
@@ -49,8 +49,8 @@ class TestDisabledTimers(unittest.TestCase):
         '''
         plugin = self.plugin
 
-        plugin._client.sender.msgs.clear()
-        assert len(plugin._client.sender.msgs) == 0
+        plugin.client.sender.msgs.clear()
+        assert len(plugin.client.sender.msgs) == 0
 
         @incr_count
         @timeit
@@ -58,7 +58,7 @@ class TestDisabledTimers(unittest.TestCase):
             return x + y
 
         no_timer(5, 6)
-        msgs = [json.loads(m) for m in plugin._client.sender.msgs]
+        msgs = [json.loads(m) for m in plugin.client.sender.msgs]
         assert len(msgs) == 1
 
         for msg in msgs:
@@ -70,4 +70,4 @@ class TestDisabledTimers(unittest.TestCase):
         # applied inside to out, but execution is outside -> in
         assert msgs[0]['type'] == 'counter'
 
-        plugin._client.sender.msgs.clear()
+        plugin.client.sender.msgs.clear()
