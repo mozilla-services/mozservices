@@ -82,7 +82,6 @@ class FunctionalTestCase(unittest2.TestCase):
         self.ini_file = os.environ.get("MOZSVC_TEST_INI_FILE", "tests.ini")
         __file__ = sys.modules[self.__class__.__module__].__file__
         self.config = get_test_configurator(__file__, self.ini_file)
-        self.config.include("syncstorage")
 
         # Test against a live server if instructed so by the environment.
         # Otherwise, test against an in-process WSGI application.
