@@ -48,6 +48,19 @@ class MetlogPlugin(object):
         self.client = CLIENT_WRAPPER.client
 
 
+def get_tlocal():
+    """
+    Return the thread local metlog context dict, if it exists. This should only
+    succeed from within a `thread_context` context manager. If we're not within
+    such a context manager (and thus the metlog context dict doesn't exist)
+    then an AttributeError will be raised.
+    """
+    if not hasattr(_LOCAL_STORAGE, 'metlog_context_dict'):
+        raise AttributeError("No `metlog_context_dict`; are you in a "
+                             "thread_context?")
+    return _LOCAL_STORAGE.metlog_context_dict
+
+
 @contextmanager
 def thread_context(callback):
     """
@@ -105,4 +118,3 @@ def monkey_service_class(un=False):
             orig_method = getattr(Service, inner_name)
             setattr(Service, method_name, orig_method)
             Service._metlog_monkeyed = False
-
