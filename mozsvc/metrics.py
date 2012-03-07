@@ -42,6 +42,12 @@ def get_metlog_client():
     return CLIENT_WRAPPER.client
 
 
+class MetlogPlugin(object):
+    def __init__(self, **kwargs):
+        setup_metlog(kwargs)
+        self.client = CLIENT_WRAPPER.client
+
+
 @contextmanager
 def thread_context(callback):
     """
