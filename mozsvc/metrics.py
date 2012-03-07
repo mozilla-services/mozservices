@@ -15,7 +15,6 @@ functions.
 """
 
 from contextlib import contextmanager
-from metlog.config import client_from_dict_config
 from metlog.decorators import timeit
 from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
 import cornice
@@ -32,11 +31,7 @@ def setup_metlog(config_dict):
     :param config_dict: Dictionary object containing the metlog client
                         configuration.
     """
-    client = client_from_dict_config(config_dict)
-    disabled_decorators = dict([(k.replace("disable_", ''), v)
-                                for (k, v) in config_dict.items()
-                                if (k.startswith('disable_') and v)])
-    CLIENT_WRAPPER.activate(client, disabled_decorators)
+    CLIENT_WRAPPER.activate(config_dict)
 
 
 def get_metlog_client():
