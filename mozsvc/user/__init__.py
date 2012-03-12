@@ -186,5 +186,5 @@ def includeme(config):
     try:
         config.registry["auth"] = load_and_register("auth", config)
     except Exception, e:
-        logger.exception("Unable to load auth backend. Problem? %s" % e)
+        logger.warning("Unable to load auth backend. Problem? %s" % e)
         config.registry["auth"] = None
