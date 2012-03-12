@@ -17,12 +17,12 @@ class Secrets(object):
     """
     def __init__(self, filename=None):
         self._secrets = defaultdict(list)
-        self.filename = None
+        self._filename = None
         if filename is not None:
             self.load(filename)
 
     def load(self, filename):
-        if self.filename is not None:
+        if self._filename is not None:
             raise ValueError('Already loaded')
 
         self._filename = filename
@@ -64,4 +64,11 @@ class Secrets(object):
     def add(self, node, size=256):
         timestamp = str(int(time.time()))
         secret = binascii.b2a_hex(os.urandom(size))[:size]
-        self._secrets[node].insert(0, (timestamp, secret))
+        # The new secret *must* sort at the end of the list.
+        # This forbids you from adding multiple secrets per second.
+        try:
+            if timestamp <= self._secrets[node][-1][0]:
+                assert False, "You can only add one secret per second"
+        except IndexError:
+            pass
+        self._secrets[node].append((timestamp, secret))

@@ -4,6 +4,8 @@
 import unittest2
 import tempfile
 import os
+import time
+import itertools
 
 from mozsvc.secrets import Secrets
 
@@ -27,9 +29,16 @@ class TestSecrets(unittest2.TestCase):
     def test_read_write(self):
         secrets = Secrets()
 
-        secrets.add('phx23456')
-        secrets.add('phx23456')
-        secrets.add('phx23')
+        # We can only add one secret per second to the file, since
+        # they are timestamped to 1s resolution.  Fake it.
+        real_time = time.time
+        time.time = itertools.count(int(real_time())).next
+        try:
+            secrets.add('phx23456')
+            secrets.add('phx23456')
+            secrets.add('phx23')
+        finally:
+            time.time = real_time
 
         phx23456_secrets = secrets.get('phx23456')
         self.assertEqual(len(secrets.get('phx23456')), 2)
