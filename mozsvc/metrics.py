@@ -34,6 +34,13 @@ def setup_metlog(config_dict):
     CLIENT_WRAPPER.activate(config_dict)
 
 
+def teardown_metlog():
+    """
+    Reset the client wrapper. Usually only needed for tests.
+    """
+    CLIENT_WRAPPER.reset()
+
+
 def get_metlog_client():
     """
     Return the currently configured Metlog client. Will not work until
