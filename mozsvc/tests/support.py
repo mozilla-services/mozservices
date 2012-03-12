@@ -77,11 +77,7 @@ class FunctionalTestCase(unittest2.TestCase):
     """
 
     def setUp(self):
-        # Load config from the .ini file.
-        # The file to use may be specified in the environment.
-        self.ini_file = os.environ.get("MOZSVC_TEST_INI_FILE", "tests.ini")
-        __file__ = sys.modules[self.__class__.__module__].__file__
-        self.config = get_test_configurator(__file__, self.ini_file)
+        self.config = self.get_test_configurator()
 
         # Test against a live server if instructed so by the environment.
         # Otherwise, test against an in-process WSGI application.
@@ -102,3 +98,11 @@ class FunctionalTestCase(unittest2.TestCase):
             "SERVER_NAME": host_url.hostname,
             "REMOTE_ADDR": "127.0.0.1",
         })
+
+    def get_test_configurator(self):
+        """Load the configurator to use for the tests."""
+        # Load config from the .ini file.
+        # The file to use may be specified in the environment.
+        self.ini_file = os.environ.get("MOZSVC_TEST_INI_FILE", "tests.ini")
+        __file__ = sys.modules[self.__class__.__module__].__file__
+        return get_test_configurator(__file__, self.ini_file)
