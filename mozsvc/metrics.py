@@ -15,9 +15,10 @@ functions.
 """
 
 from contextlib import contextmanager
+from cornice import Service
 from metlog.decorators import timeit
 from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
-import cornice
+import functools
 import threading
 
 
@@ -111,17 +112,38 @@ class apache_log(MetlogDecorator):
             return self._fn(*args, **kwargs)
 
 
-def monkey_service_class(un=False):
-    Service = cornice.Service
-    for method_name in ['get', 'put', 'post', 'delete']:
-        inner_name = '_metlog_orig_%s' % method_name
-        if not un:
-            orig_method = getattr(Service, method_name)
-            wrapped = apache_log(timeit(orig_method))
-            setattr(Service, inner_name, orig_method)
-            setattr(Service, method_name, wrapped)
-            Service._metlog_monkeyed = True
-        else:
-            orig_method = getattr(Service, inner_name)
-            setattr(Service, method_name, orig_method)
-            Service._metlog_monkeyed = False
+class _DecoratorWrapper(object):
+    """
+    This class wraps the output of of a decorator (i.e. the decorated method)
+    with a timer.
+    """
+    def __init__(self, fn):
+        self._underlying_decorator = fn
+
+    def __call__(self, fn, *args, **kwargs):
+        # Wrap the underlying callable with standard decorators for writing out
+        # wsgi environ values and timing requests
+        @apache_log
+        @timeit
+        @functools.wraps(fn)
+        def timed_fn(*fn_args, **fn_kwargs):
+            return fn(*fn_args, **fn_kwargs)
+        new_args = tuple([timed_fn] + list(args))
+        return self._underlying_decorator(*new_args, **kwargs)
+
+
+class MetricsService(Service):
+    def __init__(self, **kw):
+        Service.__init__(self, **kw)
+
+    def get(self, **kw):
+        return _DecoratorWrapper(Service.get(self, **kw))
+
+    def put(self, **kw):
+        return _DecoratorWrapper(Service.put(self, **kw))
+
+    def post(self, **kw):
+        return _DecoratorWrapper(Service.post(self, **kw))
+
+    def delete(self, **kw):
+        return _DecoratorWrapper(Service.delete(self, **kw))
