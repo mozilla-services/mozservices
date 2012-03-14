@@ -112,26 +112,6 @@ class apache_log(MetlogDecorator):
             return self._fn(*args, **kwargs)
 
 
-class _DecoratorWrapper(object):
-    """
-    This class wraps the output of of a decorator (i.e. the decorated method)
-    with a timer.
-    """
-    def __init__(self, fn):
-        self._underlying_decorator = fn
-
-    def __call__(self, fn, *args, **kwargs):
-        # Wrap the underlying callable with standard decorators for writing out
-        # wsgi environ values and timing requests
-        @apache_log
-        @timeit
-        @functools.wraps(fn)
-        def timed_fn(*fn_args, **fn_kwargs):
-            return fn(*fn_args, **fn_kwargs)
-        new_args = tuple([timed_fn] + list(args))
-        return self._underlying_decorator(*new_args, **kwargs)
-
-
 class MetricsService(Service):
     def api(self, **kw):
         return Service.api(self, decorators=[timeit, apache_log], **kw)
