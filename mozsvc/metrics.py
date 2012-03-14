@@ -133,17 +133,5 @@ class _DecoratorWrapper(object):
 
 
 class MetricsService(Service):
-    def __init__(self, **kw):
-        Service.__init__(self, **kw)
-
-    def get(self, **kw):
-        return _DecoratorWrapper(Service.get(self, **kw))
-
-    def put(self, **kw):
-        return _DecoratorWrapper(Service.put(self, **kw))
-
-    def post(self, **kw):
-        return _DecoratorWrapper(Service.post(self, **kw))
-
-    def delete(self, **kw):
-        return _DecoratorWrapper(Service.delete(self, **kw))
+    def api(self, **kw):
+        return Service.api(self, decorators=[timeit, apache_log], **kw)
