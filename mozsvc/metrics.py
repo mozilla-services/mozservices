@@ -114,20 +114,23 @@ class apache_log(MetlogDecorator):
 
 class MetricsService(Service):
 
-    def preprocess_kw(self, kw):
+    def __init__(self, **kw):
+        Service.__init__(self, **kw)
+        self._decorators = set()
+
+    def preprocess_kw(self, **kw):
         """
         Overload this to provide preprocessing of keyword arguments
         """
-        decorators = kw.pop('decorators', [])
+        self._decorators.update(set(kw.pop('decorators', [])))
 
-        def mutator(func):
+        def wrapper(func):
+
             applied_set = set()
-
-            # Copy the list of decorators that have already been applied
             if hasattr(func, '_metlog_decorators'):
                 applied_set.update(func._metlog_decorators)
 
-            for decorator in decorators:
+            for decorator in self._decorators:
                 # Stacked api decorators may result in this
                 # being called more
                 # than once for the same function, we need to make sure that
@@ -138,8 +141,11 @@ class MetricsService(Service):
                     applied_set.add(decorator)
 
             func._metlog_decorators = applied_set
+
             return func
-        return mutator
+        return wrapper
 
     def api(self, **kw):
-        return Service.api(self, decorators=[timeit, apache_log], **kw)
+        self._decorators.update(set(kw.pop('decorators', [])))
+
+        return Service.api(self, **kw)
