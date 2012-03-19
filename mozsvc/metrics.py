@@ -113,5 +113,33 @@ class apache_log(MetlogDecorator):
 
 
 class MetricsService(Service):
+
+    def preprocess_kw(self, kw):
+        """
+        Overload this to provide preprocessing of keyword arguments
+        """
+        decorators = kw.pop('decorators', [])
+
+        def mutator(func):
+            applied_set = set()
+
+            # Copy the list of decorators that have already been applied
+            if hasattr(func, '_metlog_decorators'):
+                applied_set.update(func._metlog_decorators)
+
+            for decorator in decorators:
+                # Stacked api decorators may result in this
+                # being called more
+                # than once for the same function, we need to make sure that
+                # the original function isn't wrapped more than once by the
+                # same functions.
+                if decorator not in applied_set:
+                    func = decorator(func)
+                    applied_set.add(decorator)
+
+            func._metlog_decorators = applied_set
+            return func
+        return mutator
+
     def api(self, **kw):
         return Service.api(self, decorators=[timeit, apache_log], **kw)
