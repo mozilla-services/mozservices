@@ -212,6 +212,10 @@ decorate_all = MetricsService(name='users', path='/{username}/all',
 def auto_decorate(request):
     return 'foo'
 
+@decorate_all.get(decorators=[incr_count])
+def decorator_override(request):
+    return 'foo'
+
 class TestMetricsService(unittest.TestCase):
     def setUp(self):
         config = Config(StringIO(dedent("""
@@ -257,3 +261,15 @@ class TestMetricsService(unittest.TestCase):
         assert 'counter' in [m['type'] for m in msgs]
         assert 'timer' in [m['type'] for m in msgs]
         assert 'wsgi' in [m['type'] for m in msgs]
+
+    def test_decorator_override(self):
+        req = Request({'PATH_INFO': '/foo/all',
+                       'SERVER_NAME': 'somehost.com',
+                       'SERVER_PORT': 80,
+                       })
+        resp = decorator_override(req)
+
+        plugin = self.plugin
+        msgs = [json.loads(m) for m in plugin.client.sender.msgs]
+        assert len(msgs) == 1
+        assert 'counter' in [m['type'] for m in msgs]

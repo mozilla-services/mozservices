@@ -16,9 +16,7 @@ functions.
 
 from contextlib import contextmanager
 from cornice import Service
-from metlog.decorators import timeit
 from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
-import functools
 import threading
 
 
@@ -123,14 +121,10 @@ class MetricsService(Service):
         """
         Overload this to provide preprocessing of keyword arguments
         """
-        self._decorators.update(set(kw.pop('decorators', [])))
-
         def wrapper(func):
-
             applied_set = set()
             if hasattr(func, '_metlog_decorators'):
                 applied_set.update(func._metlog_decorators)
-
             for decorator in self._decorators:
                 # Stacked api decorators may result in this
                 # being called more
@@ -140,13 +134,13 @@ class MetricsService(Service):
                 if decorator not in applied_set:
                     func = decorator(func)
                     applied_set.add(decorator)
-
             func._metlog_decorators = applied_set
-
             return func
         return wrapper
 
     def api(self, **kw):
-        self._decorators.update(set(kw.pop('decorators', [])))
-
+        if 'decorators' in kw:
+            # We want to destructively override decorators
+            # if we get them through the api() call
+            self._decorators = set(kw.pop('decorators'))
         return Service.api(self, **kw)
