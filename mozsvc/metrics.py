@@ -115,8 +115,9 @@ class apache_log(MetlogDecorator):
 class MetricsService(Service):
 
     def __init__(self, **kw):
-        Service.__init__(self, **kw)
         self._decorators = set()
+        self._decorators.update(set(kw.pop('decorators', [])))
+        Service.__init__(self, **kw)
 
     def preprocess_kw(self, **kw):
         """

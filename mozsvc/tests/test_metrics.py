@@ -5,6 +5,7 @@ from mozsvc.config import Config
 
 from mozsvc.metrics import MetlogPlugin
 from mozsvc.metrics import apache_log
+from mozsvc.metrics import MetricsService
 
 from metlog.decorators import incr_count
 from metlog.decorators import timeit
@@ -16,6 +17,7 @@ from textwrap import dedent
 from webob.request import Request
 import unittest
 import json
+
 
 
 class TestMetrics(unittest.TestCase):
@@ -195,22 +197,59 @@ class TestCannedDecorators(unittest.TestCase):
         assert 'foo' in msg['fields']['threadlocal']
         assert msg['fields']['threadlocal']['foo'] == 'bar'
 
-    def xtest_metrics_service(self):
+
+user_info = MetricsService(name='users', path='/{username}/info',
+                    description='some_svc')
+
+@user_info.get(decorators=[incr_count, timeit, apache_log])
+def get_info(request):
+    return 'foo'
+
+decorate_all = MetricsService(name='users', path='/{username}/all',
+                    description='some_svc',
+                    decorators=[incr_count, timeit, apache_log])
+@decorate_all.get()
+def auto_decorate(request):
+    return 'foo'
+
+class TestMetricsService(unittest.TestCase):
+    def setUp(self):
+        config = Config(StringIO(dedent("""
+        [test1]
+        enabled=true
+        backend = mozsvc.metrics.MetlogPlugin
+        sender_class=metlog.senders.DebugCaptureSender
+        """)))
+        settings = {"config": config}
+        self.plugin = load_from_config("test1", config)
+        config = Configurator(settings=settings)
+        config.commit()
+
+    def test_metrics_service(self):
         '''
         Test the MetricsService class
         '''
-        user_info = MetricsService(name='users', path='/{username}/info',
-                            description='some_svc')
 
-        @user_info.get()
-        def get_info(request):
-            return 'foo'
 
         req = Request({'PATH_INFO': '/foo/info',
                        'SERVER_NAME': 'somehost.com',
                        'SERVER_PORT': 80,
                        })
-        get_info(req)
+        resp = get_info(req)
+
+        plugin = self.plugin
+        msgs = [json.loads(m) for m in plugin.client.sender.msgs]
+        assert len(msgs) == 3
+        assert 'counter' in [m['type'] for m in msgs]
+        assert 'timer' in [m['type'] for m in msgs]
+        assert 'wsgi' in [m['type'] for m in msgs]
+
+    def test_decorate_at_constructor(self):
+        req = Request({'PATH_INFO': '/foo/all',
+                       'SERVER_NAME': 'somehost.com',
+                       'SERVER_PORT': 80,
+                       })
+        resp = auto_decorate(req)
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
