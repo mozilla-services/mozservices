@@ -19,9 +19,7 @@ import unittest
 import json
 
 
-
 class TestMetrics(unittest.TestCase):
-
     def test_loading_from_config(self):
         config = Config(StringIO(dedent("""
         [test1]
@@ -68,26 +66,26 @@ class TestConfigurationLoading(unittest.TestCase):
 
     def test_loading_from_config(self):
         plugin = self.plugin
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertTrue(len(plugin.client.sender.msgs) == 0)
 
         @timeit
         def target_callable(x, y):
             return x + y
 
         result = target_callable(5, 6)
-        assert result == 11
-        assert len(plugin.client.sender.msgs) == 1
+        self.assertTrue(result == 11)
+        self.assertTrue(len(plugin.client.sender.msgs) == 1)
 
         obj = json.loads(plugin.client.sender.msgs[0])
 
         expected = 'mozsvc.tests.test_metrics:target_callable'
         actual = obj['fields']['name']
-        assert actual == expected
+        self.assertTrue(actual == expected)
 
         # Now test to make sure we can enque 2 messages using stacked
         # decorators
         plugin.client.sender.msgs.clear()
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertTrue(len(plugin.client.sender.msgs) == 0)
 
         @incr_count
         @timeit
@@ -96,20 +94,20 @@ class TestConfigurationLoading(unittest.TestCase):
 
         result = new_target_callable(5, 6)
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 2
+        self.assertTrue(len(msgs) == 2)
 
         # Names should be preserved
-        assert new_target_callable.__name__ == 'new_target_callable'
+        self.assertTrue(new_target_callable.__name__ == 'new_target_callable')
 
         for msg in msgs:
             expected = 'mozsvc.tests.test_metrics:target_callable'
             actual = obj['fields']['name']
-            assert actual == expected
+            self.assertTrue(actual == expected)
 
         # First msg should be timer then the counter
         # as decorators just wrap each other
-        assert msgs[0]['type'] == 'timer'
-        assert msgs[1]['type'] == 'counter'
+        self.assertTrue(msgs[0]['type'] == 'timer')
+        self.assertTrue(msgs[1]['type'] == 'counter')
 
 
 class TestCannedDecorators(unittest.TestCase):
@@ -133,7 +131,7 @@ class TestCannedDecorators(unittest.TestCase):
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertTrue(len(plugin.client.sender.msgs) == 0)
 
         @incr_count
         @timeit
@@ -142,20 +140,20 @@ class TestCannedDecorators(unittest.TestCase):
 
         ordering_1(5, 6)
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 2
+        self.assertTrue(len(msgs) == 2)
 
         for msg in msgs:
             expected = 'mozsvc.tests.test_metrics:ordering_1'
             actual = msg['fields']['name']
-            assert actual == expected
+            self.assertTrue(actual == expected)
 
         # First msg should be counter, then timer as decorators are
         # applied inside to out, but execution is outside -> in
-        assert msgs[0]['type'] == 'timer'
-        assert msgs[1]['type'] == 'counter'
+        self.assertTrue(msgs[0]['type'] == 'timer')
+        self.assertTrue(msgs[1]['type'] == 'counter')
 
         plugin.client.sender.msgs.clear()
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertTrue(len(plugin.client.sender.msgs) == 0)
 
         @timeit
         @incr_count
@@ -164,24 +162,24 @@ class TestCannedDecorators(unittest.TestCase):
 
         ordering_2(5, 6)
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 2
+        self.assertTrue(len(msgs) == 2)
 
         for msg in msgs:
             expected = 'mozsvc.tests.test_metrics:ordering_2'
             actual = msg['fields']['name']
-            assert actual == expected
+            self.assertTrue(actual == expected)
 
         # Ordering of log messages should occur in the in->out
         # ordering of decoration
-        assert msgs[0]['type'] == 'counter'
-        assert msgs[1]['type'] == 'timer'
+        self.assertTrue(msgs[0]['type'] == 'counter')
+        self.assertTrue(msgs[1]['type'] == 'timer')
 
     def test_apache_logger(self):
 
         plugin = self.plugin
         plugin.client.sender.msgs.clear()
         msgs = plugin.client.sender.msgs
-        assert len(msgs) == 0
+        self.assertTrue(len(msgs) == 0)
 
         @apache_log
         def some_method(request):
@@ -194,12 +192,13 @@ class TestCannedDecorators(unittest.TestCase):
                        })
         some_method(req)
         msg = json.loads(plugin.client.sender.msgs[0])
-        assert 'foo' in msg['fields']['threadlocal']
-        assert msg['fields']['threadlocal']['foo'] == 'bar'
+        self.assertTrue('foo' in msg['fields']['threadlocal'])
+        self.assertTrue(msg['fields']['threadlocal']['foo'] == 'bar')
 
 
 user_info = MetricsService(name='users', path='/{username}/info',
                     description='some_svc')
+
 
 @user_info.get(decorators=[timeit, apache_log])
 def get_info(request):
@@ -207,14 +206,18 @@ def get_info(request):
 
 decorate_all = MetricsService(name='users', path='/{username}/all',
                     description='some_svc',
-                    decorators=[incr_count, timeit, apache_log])
+                    decorators=[timeit, apache_log])
+
+
 @decorate_all.get()
 def auto_decorate(request):
     return 'foo'
 
+
 @decorate_all.get(decorators=[incr_count])
 def decorator_override(request):
     return 'foo'
+
 
 class TestMetricsService(unittest.TestCase):
     def setUp(self):
@@ -230,22 +233,18 @@ class TestMetricsService(unittest.TestCase):
         config.commit()
 
     def test_metrics_service(self):
-        '''
-        Test the MetricsService class
-        '''
-
-
         req = Request({'PATH_INFO': '/foo/info',
                        'SERVER_NAME': 'somehost.com',
                        'SERVER_PORT': 80,
                        })
         resp = get_info(req)
+        self.assertTrue(resp == 'foo')
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 2
-        assert 'timer' in [m['type'] for m in msgs]
-        assert 'wsgi' in [m['type'] for m in msgs]
+        self.assertTrue(len(msgs) == 2)
+        self.assertTrue('timer' in [m['type'] for m in msgs])
+        self.assertTrue('wsgi' in [m['type'] for m in msgs])
 
     def test_decorate_at_constructor(self):
         req = Request({'PATH_INFO': '/foo/all',
@@ -253,13 +252,13 @@ class TestMetricsService(unittest.TestCase):
                        'SERVER_PORT': 80,
                        })
         resp = auto_decorate(req)
+        self.assertTrue(resp == 'foo')
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 3
-        assert 'counter' in [m['type'] for m in msgs]
-        assert 'timer' in [m['type'] for m in msgs]
-        assert 'wsgi' in [m['type'] for m in msgs]
+        self.assertTrue(len(msgs) == 2)
+        self.assertTrue('timer' in [m['type'] for m in msgs])
+        self.assertTrue('wsgi' in [m['type'] for m in msgs])
 
     def test_decorator_override(self):
         req = Request({'PATH_INFO': '/foo/all',
@@ -267,8 +266,9 @@ class TestMetricsService(unittest.TestCase):
                        'SERVER_PORT': 80,
                        })
         resp = decorator_override(req)
+        self.assertTrue(resp == 'foo')
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 1
-        assert 'counter' in [m['type'] for m in msgs]
+        self.assertTrue(len(msgs) == 1)
+        self.assertTrue('counter' in [m['type'] for m in msgs])
