@@ -201,7 +201,7 @@ class TestCannedDecorators(unittest.TestCase):
 user_info = MetricsService(name='users', path='/{username}/info',
                     description='some_svc')
 
-@user_info.get(decorators=[incr_count, timeit, apache_log])
+@user_info.get(decorators=[timeit, apache_log])
 def get_info(request):
     return 'foo'
 
@@ -243,8 +243,7 @@ class TestMetricsService(unittest.TestCase):
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 3
-        assert 'counter' in [m['type'] for m in msgs]
+        assert len(msgs) == 2
         assert 'timer' in [m['type'] for m in msgs]
         assert 'wsgi' in [m['type'] for m in msgs]
 
