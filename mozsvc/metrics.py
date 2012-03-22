@@ -114,12 +114,13 @@ class MetricsService(Service):
 
     def __init__(self, **kw):
         from metlog.decorators import timeit
-        self._decorators = set(kw.pop('decorators', [timeit, apache_log]))
+        self._decorators = kw.pop('decorators', [timeit, apache_log])
         Service.__init__(self, **kw)
 
     def get_view_wrapper(self, kw):
         """
-        Overload this to provide preprocessing of keyword arguments
+        Returns a wrapper that will wrap the view callable w/ metlog decorators
+        for timing and logging wsgi variables.
         """
         decorators = kw.pop('decorators', self._decorators)
         def wrapper(func):
