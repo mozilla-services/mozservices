@@ -17,7 +17,7 @@ requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson', 'cef',
 
 
 setup(name='mozsvc',
-      version='0.2',
+      version='0.3',
       description='Various utilities for Mozilla apps',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
