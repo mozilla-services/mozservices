@@ -124,10 +124,6 @@ class TestCannedDecorators(unittest.TestCase):
         config.commit()
 
     def test_decorator_ordering(self):
-        '''
-        decorator ordering may matter when Ops goes to look at the
-        logs. Make sure we capture stuff in the right order
-        '''
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
