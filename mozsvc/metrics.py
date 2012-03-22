@@ -121,16 +121,16 @@ class MetricsService(Service):
         """
         Overload this to provide preprocessing of keyword arguments
         """
+        decorators = kw.pop('decorators', self._decorators)
         def wrapper(func):
             applied_set = set()
             if hasattr(func, '_metlog_decorators'):
                 applied_set.update(func._metlog_decorators)
-            for decorator in self._decorators:
-                # Stacked api decorators may result in this
-                # being called more
+            for decorator in decorators:
+                # Stacked api decorators may result in this being called more
                 # than once for the same function, we need to make sure that
                 # the original function isn't wrapped more than once by the
-                # same functions.
+                # same decorator.
                 if decorator not in applied_set:
                     func = decorator(func)
                     applied_set.add(decorator)
