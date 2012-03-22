@@ -117,7 +117,7 @@ class MetricsService(Service):
         self._decorators = set(kw.pop('decorators', [timeit, apache_log]))
         Service.__init__(self, **kw)
 
-    def preprocess_kw(self, **kw):
+    def get_view_wrapper(self, kw):
         """
         Overload this to provide preprocessing of keyword arguments
         """
