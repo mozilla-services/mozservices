@@ -10,6 +10,8 @@
 Integration between mozsvc.user and pyramid_whoauth.
 """
 
+from urlparse import urlparse
+
 from zope.interface import implements
 
 from repoze.who.interfaces import IAuthenticator
@@ -123,7 +125,17 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
         """Get the list of possible secrets for signing tokens."""
         if self.secrets is None:
             return [self.secret]
-        return self.secrets.get(request.host)
+        # Secrets are looked up by hostname.
+        # We need to normalize some port information for this work right.
+        node_name = request.host_url
+        host_url = urlparse(request.host_url)
+        if host_url.scheme == "http" and host_url.port == 80:
+            assert node_name.endswith(":80")
+            node_name = node_name[:-3]
+        elif host_url.scheme == "http" and host_url.port == 443:
+            assert node_name.endswith(":443")
+            node_name = node_name[:-4]
+        return self.secrets.get(node_name)
 
 
 def configure_who_defaults(config):
