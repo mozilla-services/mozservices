@@ -114,34 +114,26 @@ class MetricsService(Service):
 
     def __init__(self, **kw):
         from metlog.decorators import timeit
-        self._decorators = set()
-        self._decorators.update(set(kw.pop('decorators', [timeit, apache_log])))
+        self._decorators = set(kw.pop('decorators', [timeit, apache_log]))
         Service.__init__(self, **kw)
 
-    def preprocess_kw(self, **kw):
+    def get_view_wrapper(self, kw):
         """
         Overload this to provide preprocessing of keyword arguments
         """
+        decorators = kw.pop('decorators', self._decorators)
         def wrapper(func):
             applied_set = set()
             if hasattr(func, '_metlog_decorators'):
                 applied_set.update(func._metlog_decorators)
-            for decorator in self._decorators:
-                # Stacked api decorators may result in this
-                # being called more
+            for decorator in decorators:
+                # Stacked api decorators may result in this being called more
                 # than once for the same function, we need to make sure that
                 # the original function isn't wrapped more than once by the
-                # same functions.
+                # same decorator.
                 if decorator not in applied_set:
                     func = decorator(func)
                     applied_set.add(decorator)
             func._metlog_decorators = applied_set
             return func
         return wrapper
-
-    def api(self, **kw):
-        if 'decorators' in kw:
-            # We want to destructively override decorators
-            # if we get them through the api() call
-            self._decorators = set(kw.pop('decorators'))
-        return Service.api(self, **kw)

@@ -73,4 +73,3 @@ class TestServiceDefinition(unittest.TestCase):
 
         resp = self.app.get("/service5")
         self.assertEquals(resp.json, {'test': 'succeeded', 'wrapped0': 'yes'})
-

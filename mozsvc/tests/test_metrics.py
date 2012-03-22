@@ -48,10 +48,10 @@ class TestMetrics(unittest.TestCase):
 
 
 class TestConfigurationLoading(unittest.TestCase):
-    '''
-    make sure that DecoratorWrapper works on decorators with
-    arguments and with out
-    '''
+    """
+    make sure that DecoratorWrapper works on decorators with arguments and with
+    out
+    """
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
@@ -124,10 +124,6 @@ class TestCannedDecorators(unittest.TestCase):
         config.commit()
 
     def test_decorator_ordering(self):
-        '''
-        decorator ordering may matter when Ops goes to look at the
-        logs. Make sure we capture stuff in the right order
-        '''
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
@@ -197,7 +193,7 @@ class TestCannedDecorators(unittest.TestCase):
 
 
 user_info = MetricsService(name='users', path='/{username}/info',
-                    description='some_svc')
+                           description='some_svc')
 
 
 @user_info.get(decorators=[timeit, apache_log])
@@ -205,8 +201,7 @@ def get_info(request):
     return 'foo'
 
 decorate_all = MetricsService(name='users', path='/{username}/all',
-                    description='some_svc',
-                    decorators=[timeit, apache_log])
+                              description='some_svc')
 
 
 @decorate_all.get()
@@ -223,7 +218,6 @@ class TestMetricsService(unittest.TestCase):
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
-        enabled=true
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
