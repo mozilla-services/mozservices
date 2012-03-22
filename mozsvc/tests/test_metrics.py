@@ -201,8 +201,7 @@ def get_info(request):
     return 'foo'
 
 decorate_all = MetricsService(name='users', path='/{username}/all',
-                    description='some_svc',
-                    decorators=[timeit, apache_log])
+                              description='some_svc')
 
 
 @decorate_all.get()
