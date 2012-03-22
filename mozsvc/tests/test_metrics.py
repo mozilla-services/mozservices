@@ -48,10 +48,10 @@ class TestMetrics(unittest.TestCase):
 
 
 class TestConfigurationLoading(unittest.TestCase):
-    '''
-    make sure that DecoratorWrapper works on decorators with
-    arguments and with out
-    '''
+    """
+    make sure that DecoratorWrapper works on decorators with arguments and with
+    out
+    """
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
