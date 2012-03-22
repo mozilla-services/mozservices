@@ -193,7 +193,7 @@ class TestCannedDecorators(unittest.TestCase):
 
 
 user_info = MetricsService(name='users', path='/{username}/info',
-                    description='some_svc')
+                           description='some_svc')
 
 
 @user_info.get(decorators=[timeit, apache_log])
