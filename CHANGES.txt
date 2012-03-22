@@ -6,7 +6,7 @@
 - Added mozsvc.http_helpers for dealing with other HTTP services.
 - Added a tween that turns BackendErrors into HTTP 503 responses.
 - Added some testing helper functions.
-
+- Added mozsvc.metrics providing first pass at metlog integration.
 
 0.1 - 2011-11-15
 ================

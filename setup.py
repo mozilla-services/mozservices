@@ -12,7 +12,7 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
 requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson', 'cef',
             'unittest2', 'WebTest', 'WSGIProxy', 'repoze.who',
             'repoze.who.plugins.macauth', 'pyramid_whoauth',
-            'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]']
+            'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]>=0.8.2']
 
 setup(name='mozsvc',
       version='0.1',
