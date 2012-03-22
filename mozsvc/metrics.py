@@ -137,10 +137,3 @@ class MetricsService(Service):
             func._metlog_decorators = applied_set
             return func
         return wrapper
-
-    def api(self, **kw):
-        if 'decorators' in kw:
-            # We want to destructively override decorators
-            # if we get them through the api() call
-            self._decorators = set(kw.pop('decorators'))
-        return Service.api(self, **kw)
