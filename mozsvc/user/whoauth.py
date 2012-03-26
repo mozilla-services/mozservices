@@ -13,7 +13,6 @@ Integration between mozsvc.user and pyramid_whoauth.
 from zope.interface import implements
 
 from repoze.who.interfaces import IAuthenticator
-from repoze.who.plugins.basicauth import BasicAuthPlugin
 from repoze.who.plugins.macauth import MACAuthPlugin
 
 from pyramid.threadlocal import get_current_request
@@ -71,6 +70,9 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
     def __init__(self, secret=None, secrets_file=None, **kwds):
         if secret is not None and secrets_file is not None:
             msg = "Can only specify one of 'secrets' or 'secrets_file'"
+            raise ValueError(msg)
+        if secret is None and  secrets_file is None:
+            msg = "Need to specify one of 'secrets' or 'secrets_file'"
             raise ValueError(msg)
         if secrets_file is not None:
             self.secret = None
