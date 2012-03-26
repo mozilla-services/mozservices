@@ -1,0 +1,13 @@
+pyramid
+pyramid_debugtoolbar
+simplejson
+cef
+unittest2
+WebTest
+WSGIProxy
+repoze.who
+repoze.who/plugins.macauth
+pyramid_whoauth
+tokenlib
+macauthlib
+metlog-py[zeromqpub]

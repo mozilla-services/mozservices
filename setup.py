@@ -9,8 +9,9 @@ with open(os.path.join(here, 'README.txt')) as f:
 with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
-requires = ['pyramid', 'pyramid_debugtoolbar', 'simplejson', 'cef',
-            'unittest2', 'WebTest', 'WSGIProxy', 'repoze.who',
+requires = ['pyramid', 'simplejson', 'cef']
+
+tests_requires = requires + [
             'repoze.who.plugins.macauth', 'pyramid_whoauth',
             'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]']
 
@@ -32,6 +33,6 @@ setup(name='mozsvc',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      tests_require=requires,
+      tests_require=tests_requires,
       test_suite="mozsvc",
       paster_plugins=['pyramid'])
