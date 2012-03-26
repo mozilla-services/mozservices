@@ -1,7 +1,7 @@
 0.3 - ???????
 =============
 
-?
+- Removed the hard dependencies from the setup.py file.
 
 0.2 - 2012-03-22
 ================
