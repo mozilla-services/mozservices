@@ -16,9 +16,7 @@ functions.
 
 from contextlib import contextmanager
 from cornice import Service
-from metlog.decorators import timeit
 from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
-import functools
 import threading
 
 
@@ -113,5 +111,30 @@ class apache_log(MetlogDecorator):
 
 
 class MetricsService(Service):
-    def api(self, **kw):
-        return Service.api(self, decorators=[timeit, apache_log], **kw)
+
+    def __init__(self, **kw):
+        from metlog.decorators import timeit
+        self._decorators = kw.pop('decorators', [timeit, apache_log])
+        Service.__init__(self, **kw)
+
+    def get_view_wrapper(self, kw):
+        """
+        Returns a wrapper that will wrap the view callable w/ metlog decorators
+        for timing and logging wsgi variables.
+        """
+        decorators = kw.pop('decorators', self._decorators)
+        def wrapper(func):
+            applied_set = set()
+            if hasattr(func, '_metlog_decorators'):
+                applied_set.update(func._metlog_decorators)
+            for decorator in decorators:
+                # Stacked api decorators may result in this being called more
+                # than once for the same function, we need to make sure that
+                # the original function isn't wrapped more than once by the
+                # same decorator.
+                if decorator not in applied_set:
+                    func = decorator(func)
+                    applied_set.add(decorator)
+            func._metlog_decorators = applied_set
+            return func
+        return wrapper

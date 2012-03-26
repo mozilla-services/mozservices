@@ -400,8 +400,9 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
     def test_that_macauth_can_use_per_node_hostname_secrets(self):
         with tempfile.NamedTemporaryFile() as sf:
             # Write some secrets to a file.
-            sf.write("host1,0001:secret11,0002:secret12\n")
-            sf.write("host2,0001:secret21,0002:secret22\n")
+            sf.write("http://host1.com,0001:secret11,0002:secret12\n")
+            sf.write("https://host2.com,0001:secret21,0002:secret22\n")
+            sf.write("https://host3.com:444,0001:secret31,0002:secret32\n")
             sf.flush()
             # Configure the plugin to load them.
             config2 = pyramid.testing.setUp()
@@ -413,7 +414,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             config2.commit()
             # It should accept a request signed with the old secret on host1.
             req = self._make_request(config=config2, environ={
-                "HTTP_HOST": "host1",
+                "HTTP_HOST": "host1.com",
             })
             id = tokenlib.make_token({"userid": 42}, secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
@@ -421,7 +422,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             self.assertEquals(authenticated_userid(req), 42)
             # It should accept a request signed with the new secret on host1.
             req = self._make_request(config=config2, environ={
-                "HTTP_HOST": "host1",
+                "HTTP_HOST": "host1.com",
             })
             id = tokenlib.make_token({"userid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
@@ -429,23 +430,50 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             self.assertEquals(authenticated_userid(req), 42)
             # It should reject a request signed with secret from other host.
             req = self._make_request(config=config2, environ={
-                "HTTP_HOST": "host2",
+                "HTTP_HOST": "host2.com",
             })
             id = tokenlib.make_token({"userid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
             self.assertRaises(Exception, authenticated_userid, req)
+            # It should reject a request over plain http when host2 is ssl.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host2.com",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            key = tokenlib.get_token_secret(id, secret="secret22")
+            macauthlib.sign_request(req, id, key)
+            self.assertRaises(Exception, authenticated_userid, req)
             # It should accept a request signed with the new secret on host2.
             req = self._make_request(config=config2, environ={
-                "HTTP_HOST": "host2",
+                "HTTP_HOST": "host2.com",
+                "wsgi.url_scheme": "https",
             })
             id = tokenlib.make_token({"userid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
+            # It should accept a request to host2 with an explicit port number.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host2.com:443",
+                "wsgi.url_scheme": "https",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            key = tokenlib.get_token_secret(id, secret="secret22")
+            macauthlib.sign_request(req, id, key)
+            self.assertEquals(authenticated_userid(req), 42)
+            # It should accept a request to host3 on a custom port.
+            req = self._make_request(config=config2, environ={
+                "HTTP_HOST": "host3.com:444",
+                "wsgi.url_scheme": "https",
+            })
+            id = tokenlib.make_token({"userid": 42}, secret="secret32")
+            key = tokenlib.get_token_secret(id, secret="secret32")
+            macauthlib.sign_request(req, id, key)
+            self.assertEquals(authenticated_userid(req), 42)
             # It should reject unknown hostnames.
             req = self._make_request(config=config2, environ={
-                "HTTP_HOST": "host3",
+                "HTTP_HOST": "host4.com",
             })
             id = tokenlib.make_token({"userid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")

@@ -13,10 +13,12 @@ requires = ['pyramid', 'simplejson', 'cef']
 
 tests_requires = requires + [
             'repoze.who.plugins.macauth', 'pyramid_whoauth',
-            'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]']
+            'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]>=0.8.2',
+            'cornice']
+
 
 setup(name='mozsvc',
-      version='0.1',
+      version='0.3',
       description='Various utilities for Mozilla apps',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
