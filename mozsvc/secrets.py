@@ -12,44 +12,47 @@ from collections import defaultdict
 
 
 class Secrets(object):
-    """ Loads into memory a secret file, and provide a method
-    to get a list of secrets for a node, ordered by timestamps
+    """Loads into memory secret files.
+
+    Provides a method to get a list of secrets for a
+    node, ordered by timestamps.
+
+    Options:
+
+    - **filename**: a list of file paths, or a single path.
     """
     def __init__(self, filename=None):
         self._secrets = defaultdict(list)
-        self._filename = None
         if filename is not None:
             self.load(filename)
 
+    def keys(self):
+        return self._secrets.keys()
+
     def load(self, filename):
-        if self._filename is not None:
-            raise ValueError('Already loaded')
+        if not isinstance(filename, (list, tuple)):
+            filename = [filename]
 
-        self._filename = filename
-        with open(filename, 'rb') as f:
+        for name in filename:
+            with open(name, 'rb') as f:
 
-            reader = csv.reader(f, delimiter=',')
-            for line, row in enumerate(reader):
-                if len(row) < 2:
-                    continue
-                node = row[0]
-                if node in self._secrets:
-                    raise ValueError("Duplicate node line %d" % line)
-                secrets = []
-                for secret in row[1:]:
-                    secret = secret.split(':')
-                    if len(secret) != 2:
-                        raise ValueError("Invalid secret line %d" % line)
-                    secrets.append(tuple(secret))
-                secrets.sort()
-                self._secrets[node] = secrets
+                reader = csv.reader(f, delimiter=',')
+                for line, row in enumerate(reader):
+                    if len(row) < 2:
+                        continue
+                    node = row[0]
+                    if node in self._secrets:
+                        raise ValueError("Duplicate node line %d" % line)
+                    secrets = []
+                    for secret in row[1:]:
+                        secret = secret.split(':')
+                        if len(secret) != 2:
+                            raise ValueError("Invalid secret line %d" % line)
+                        secrets.append(tuple(secret))
+                    secrets.sort()
+                    self._secrets[node] = secrets
 
-    def save(self, filename=None):
-        if filename is None:
-            filename = self._filename
-        if filename is None:
-            raise ValueError('You need to provide a filename')
-
+    def save(self, filename):
         with open(filename, 'wb') as f:
             writer = csv.writer(f, delimiter=',')
             for node, secrets in self._secrets.items():

@@ -52,3 +52,22 @@ class TestSecrets(unittest2.TestCase):
         self.assertEqual(len(secrets2.get('phx23456')), 2)
         self.assertEqual(len(secrets2.get('phx23')), 1)
         self.assertEquals(secrets2.get('phx23456'), phx23456_secrets)
+
+    def test_multiple_files(self):
+        # creating two distinct files
+        secrets = Secrets()
+        secrets.add('phx23456')
+        one = self.tempfile()
+        secrets.save(one)
+
+        secrets = Secrets()
+        secrets.add('phx123')
+        two = self.tempfile()
+        secrets.save(two)
+
+        # loading the two files
+        files = one, two
+        secrets = Secrets(files)
+        keys = secrets.keys()
+        keys.sort()
+        self.assertEqual(keys, ['phx123', 'phx23456'])
