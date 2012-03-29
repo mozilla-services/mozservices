@@ -28,6 +28,7 @@ def wrap_fn(fn):
         return result
     return wrapper
 
+
 @service3.get(decorators=[wrap_fn])
 def wrapped_get3(request):
     return {"test": "succeeded"}

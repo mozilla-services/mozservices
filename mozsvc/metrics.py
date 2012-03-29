@@ -123,6 +123,7 @@ class MetricsService(Service):
         for timing and logging wsgi variables.
         """
         decorators = kw.pop('decorators', self._decorators)
+
         def wrapper(func):
             applied_set = set()
             if hasattr(func, '_metlog_decorators'):
