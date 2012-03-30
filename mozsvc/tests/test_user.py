@@ -308,7 +308,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
         mac_plugin = api_factory.authenticators[1][1]
         # Generate signed request.
         req = self._make_request()
-        id, key = mac_plugin.encode_mac_id(req, {"userid": 42})
+        id, key = mac_plugin.encode_mac_id(req, {"uid": 42})
         macauthlib.sign_request(req, id, key)
         # That should be enough to authenticate.
         self.assertEquals(authenticated_userid(req), 42)
@@ -416,7 +416,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             req = self._make_request(config=config2, environ={
                 "HTTP_HOST": "host1.com",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret11")
+            id = tokenlib.make_token({"uid": 42}, secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -424,7 +424,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             req = self._make_request(config=config2, environ={
                 "HTTP_HOST": "host1.com",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -432,7 +432,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             req = self._make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
             self.assertRaises(Exception, authenticated_userid, req)
@@ -440,7 +440,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             req = self._make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             macauthlib.sign_request(req, id, key)
             self.assertRaises(Exception, authenticated_userid, req)
@@ -449,7 +449,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
                 "HTTP_HOST": "host2.com",
                 "wsgi.url_scheme": "https",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -458,7 +458,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
                 "HTTP_HOST": "host2.com:443",
                 "wsgi.url_scheme": "https",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -467,7 +467,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
                 "HTTP_HOST": "host3.com:444",
                 "wsgi.url_scheme": "https",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret32")
+            id = tokenlib.make_token({"uid": 42}, secret="secret32")
             key = tokenlib.get_token_secret(id, secret="secret32")
             macauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -475,7 +475,7 @@ class UserWhoAuthTestCase(TestCaseHelpers, unittest.TestCase):
             req = self._make_request(config=config2, environ={
                 "HTTP_HOST": "host4.com",
             })
-            id = tokenlib.make_token({"userid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
             self.assertRaises(Exception, authenticated_userid, req)
