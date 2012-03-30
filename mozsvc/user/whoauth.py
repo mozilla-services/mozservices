@@ -71,10 +71,10 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
 
     def __init__(self, secret=None, secrets_file=None, **kwds):
         if secret is not None and secrets_file is not None:
-            msg = "Can only specify one of 'secrets' or 'secrets_file'"
+            msg = "Can only specify one of 'secret' or 'secrets_file'"
             raise ValueError(msg)
         if secret is None and  secrets_file is None:
-            msg = "Need to specify one of 'secrets' or 'secrets_file'"
+            msg = "Need to specify one of 'secret' or 'secrets_file'"
             raise ValueError(msg)
         if secrets_file is not None:
             self.secret = None
