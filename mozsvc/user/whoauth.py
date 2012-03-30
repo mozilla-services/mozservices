@@ -21,6 +21,7 @@ from pyramid.threadlocal import get_current_request
 
 import tokenlib
 
+import mozsvc
 import mozsvc.user
 import mozsvc.secrets
 
@@ -73,9 +74,16 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
         if secret is not None and secrets_file is not None:
             msg = "Can only specify one of 'secret' or 'secrets_file'"
             raise ValueError(msg)
-        if secret is None and  secrets_file is None:
-            msg = "Need to specify one of 'secret' or 'secrets_file'"
-            raise ValueError(msg)
+        elif secret is None and  secrets_file is None:
+            # Using secret=None will cause tokenlib to use a randomly-generated
+            # secret.  This is useful for getting started without having to
+            # twiddle any configuration files, but probably not what anyone
+            # wants to use long-term.
+            msgs = ["WARNING: using a randomly-generated token secret.",
+                    "You probably want to set 'secret' or 'secrets_file' in"
+                    "the [who.plugin.macauth] section of your configuration"]
+            for msg in msgs:
+                mozsvc.logger.warn(msg)
         if secrets_file is not None:
             self.secret = None
             self.secrets = mozsvc.secrets.Secrets(secrets_file)
