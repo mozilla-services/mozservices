@@ -1,7 +1,10 @@
-0.3 - ???????
-=============
+0.3 - 2012-04-18
+================
 
 - Removed the hard dependencies from the setup.py file.
+- Secret can load several files now
+- use req.user["uid"] for consistency with tokenserver
+
 
 0.2 - 2012-03-22
 ================
