@@ -68,15 +68,22 @@ class TestCase(unittest2.TestCase):
     """TestCase with some generic helper methods."""
 
     def setUp(self):
-        self.config = self.get_test_configurator()
+        super(TestCase, self).setUp()
+        self.config = self.get_configurator()
 
-    def get_test_configurator(self):
+    def tearDown(self):
+        self.config.end()
+        super(TestCase, self).tearDown()
+
+    def get_configurator(self):
         """Load the configurator to use for the tests."""
         # Load config from the .ini file.
         # The file to use may be specified in the environment.
         self.ini_file = os.environ.get("MOZSVC_TEST_INI_FILE", "tests.ini")
         __file__ = sys.modules[self.__class__.__module__].__file__
-        return get_test_configurator(__file__, self.ini_file)
+        config = get_test_configurator(__file__, self.ini_file)
+        config.begin()
+        return config
 
     def make_request(self, *args, **kwds):
         return make_request(self.config, *args, **kwds)
