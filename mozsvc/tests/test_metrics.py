@@ -251,9 +251,11 @@ class TestMetricsService(unittest.TestCase):
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        self.assertTrue(len(msgs) == 2)
-        self.assertTrue('timer' in [m['type'] for m in msgs])
-        self.assertTrue('wsgi' in [m['type'] for m in msgs])
+        msg_types = [m['type'] for m in msgs]
+        self.assertTrue(len(msgs) == 3)
+        self.assertTrue('timer' in msg_types)
+        self.assertTrue('counter' in msg_types)
+        self.assertTrue('wsgi' in msg_types)
 
     def test_decorator_override(self):
         req = Request({'PATH_INFO': '/foo/all',

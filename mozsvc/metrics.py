@@ -16,6 +16,7 @@ functions.
 
 from contextlib import contextmanager
 from cornice import Service
+from metlog.decorators import timeit, incr_count
 from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
 import threading
 
@@ -113,8 +114,8 @@ class apache_log(MetlogDecorator):
 class MetricsService(Service):
 
     def __init__(self, **kw):
-        from metlog.decorators import timeit
-        self._decorators = kw.pop('decorators', [timeit, apache_log])
+        self._decorators = kw.pop('decorators', [timeit, incr_count,
+                                                 apache_log])
         Service.__init__(self, **kw)
 
     def get_view_wrapper(self, kw):
