@@ -42,8 +42,9 @@ class TestMetrics(unittest.TestCase):
 
         client = plugin.client
         sender = client.sender
+        bindstrs = sender.pool.socket().connect_bind
 
-        self.assertEquals(sender.bindstrs, \
+        self.assertEquals(bindstrs, \
                 ['tcp://localhost:5585', 'tcp://localhost:5586'])
 
 
