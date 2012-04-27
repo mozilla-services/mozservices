@@ -61,8 +61,7 @@ class TestDisabledTimers(unittest.TestCase):
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
         self.assertEqual(len(msgs), 1)
 
-        for msg in msgs:
-            expected = 'mozsvc.tests.test_partial_disable_metrics:no_timer'
+        expected = 'mozsvc.tests.test_partial_disable_metrics.no_timer'
         self.assertEqual(msgs[0]['fields']['name'], expected)
         self.assertEqual(msgs[0]['type'], 'counter')
 

@@ -79,7 +79,7 @@ class TestConfigurationLoading(unittest.TestCase):
 
         obj = json.loads(plugin.client.sender.msgs[0])
 
-        expected = 'mozsvc.tests.test_metrics:target_callable'
+        expected = 'mozsvc.tests.test_metrics.target_callable'
         actual = obj['fields']['name']
         self.assertEqual(actual, expected)
 
@@ -101,7 +101,7 @@ class TestConfigurationLoading(unittest.TestCase):
         self.assertEqual(new_target_callable.__name__, 'new_target_callable')
 
         for msg in msgs:
-            expected = 'mozsvc.tests.test_metrics:target_callable'
+            expected = 'mozsvc.tests.test_metrics.target_callable'
             actual = obj['fields']['name']
             self.assertEqual(actual, expected)
 
@@ -140,7 +140,7 @@ class TestCannedDecorators(unittest.TestCase):
         self.assertEqual(len(msgs), 2)
 
         for msg in msgs:
-            expected = 'mozsvc.tests.test_metrics:ordering_1'
+            expected = 'mozsvc.tests.test_metrics.ordering_1'
             actual = msg['fields']['name']
             self.assertEqual(actual, expected)
 
@@ -162,7 +162,7 @@ class TestCannedDecorators(unittest.TestCase):
         self.assertEqual(len(msgs), 2)
 
         for msg in msgs:
-            expected = 'mozsvc.tests.test_metrics:ordering_2'
+            expected = 'mozsvc.tests.test_metrics.ordering_2'
             actual = msg['fields']['name']
             self.assertEqual(actual, expected)
 
