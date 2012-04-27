@@ -16,9 +16,10 @@ functions.
 
 from contextlib import contextmanager
 from cornice import Service
-from metlog.config import CLIENT_HOLDER, client_from_dict_config
+from metlog.config import client_from_dict_config
 from metlog.decorators import timeit, incr_count
 from metlog.decorators.base import MetlogDecorator
+from metlog.holder import CLIENT_HOLDER
 import threading
 
 
