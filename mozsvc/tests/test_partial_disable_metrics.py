@@ -41,10 +41,6 @@ class TestDisabledTimers(unittest.TestCase):
         config.commit()
 
     def test_only_some_decorators(self):
-        '''
-        decorator ordering may matter when Ops goes to look at the
-        logs. Make sure we capture stuff in the right order
-        '''
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
