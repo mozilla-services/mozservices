@@ -50,7 +50,7 @@ class TestDisabledTimers(unittest.TestCase):
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertEqual(len(plugin.client.sender.msgs), 0)
 
         @incr_count
         @timeit
@@ -59,15 +59,11 @@ class TestDisabledTimers(unittest.TestCase):
 
         no_timer(5, 6)
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 1
+        self.assertEqual(len(msgs), 1)
 
         for msg in msgs:
             expected = 'mozsvc.tests.test_partial_disable_metrics:no_timer'
-            actual = msg['fields']['name']
-            assert actual == expected
-
-        # First msg should be counter, then timer as decorators are
-        # applied inside to out, but execution is outside -> in
-        assert msgs[0]['type'] == 'counter'
+        self.assertEqual(msgs[0]['fields']['name'], expected)
+        self.assertEqual(msgs[0]['type'], 'counter')
 
         plugin.client.sender.msgs.clear()
