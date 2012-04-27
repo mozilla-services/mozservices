@@ -26,8 +26,7 @@ import json
 
 class TestDisabledTimers(unittest.TestCase):
     """
-    We want the counter decorators to fire, but the timer decorators
-    should not
+    We want the counter decorators to fire, but the timer decorators should not
     """
     def setUp(self):
         config = Config(StringIO(dedent("""
