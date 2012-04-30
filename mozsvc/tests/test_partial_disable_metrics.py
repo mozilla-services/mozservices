@@ -33,7 +33,8 @@ class TestDisabledTimers(unittest.TestCase):
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
-        disable_timeit=true
+        global_disabled_decorators = timeit
+                                     something
         """)))
         settings = {"config": config}
         config = Configurator(settings=settings)

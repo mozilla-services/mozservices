@@ -43,14 +43,6 @@ def setup_metlog(config_dict, default=False):
     if default:
         CLIENT_HOLDER.set_default_client_name(name)
 
-    # XXX This should really be handled by the config parsing in metlog-py
-    # itself
-    disabled_decorators = [k.replace('disable_', '')
-                           for (k, v) in config_dict.items()
-                           if (k.startswith('disable_') and v)]
-    global_config = CLIENT_HOLDER.global_config
-    global_config['disabled_decorators'] = set(disabled_decorators)
-
 
 def get_metlog_client(name=None):
     """
