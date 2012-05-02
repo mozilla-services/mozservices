@@ -16,43 +16,52 @@ functions.
 
 from contextlib import contextmanager
 from cornice import Service
+from metlog.config import client_from_dict_config
 from metlog.decorators import timeit, incr_count
-from metlog.decorators.base import CLIENT_WRAPPER, MetlogDecorator
+from metlog.decorators.base import MetlogDecorator
+from metlog.holder import CLIENT_HOLDER
 import threading
 
 
 _LOCAL_STORAGE = threading.local()
 
 
-def setup_metlog(config_dict):
+def setup_metlog(config_dict, default=False):
     """
-    Instantiate the Metlog client and set up the client wrapper.
+    Instantiate a Metlog client and add it to the client holder.
 
     :param config_dict: Dictionary object containing the metlog client
                         configuration.
+    :param default: Should this be specified as CLIENT_HOLDER's default
+                    client? Note that the first client to be added will
+                    automatically be specified as the default, regardless
+                    of the value of this argument.
     """
-    CLIENT_WRAPPER.activate(config_dict)
+    name = config_dict.get('logger', '')
+    client = CLIENT_HOLDER.get_client(name)
+    client = client_from_dict_config(config_dict, client)
+    if default:
+        CLIENT_HOLDER.set_default_client_name(name)
 
 
-def teardown_metlog():
+def get_metlog_client(name=None):
     """
-    Reset the client wrapper. Usually only needed for tests.
-    """
-    CLIENT_WRAPPER.reset()
+    Return the specified Metlog client from the CLIENT_HOLDER.
 
-
-def get_metlog_client():
+    :param name: Name of metlog client to fetch. If not provided the
+                 holder's specified default client will be used.
     """
-    Return the currently configured Metlog client. Will not work until
-    `setup_metlog` has been called to initialize the client wrapper.
-    """
-    return CLIENT_WRAPPER.client
+    if name is not None:
+        client = CLIENT_HOLDER.get_client(name)
+    else:
+        client = CLIENT_HOLDER.default_client
+    return client
 
 
 class MetlogPlugin(object):
     def __init__(self, **kwargs):
         setup_metlog(kwargs)
-        self.client = CLIENT_WRAPPER.client
+        self.client = CLIENT_HOLDER.default_client
 
 
 def get_tlocal():
@@ -105,7 +114,7 @@ class apache_log(MetlogDecorator):
             Stuff the threadlocal data into the message and send it out.
             """
             webserv_log['threadlocal'] = tl_data
-            CLIENT_WRAPPER.client.metlog('wsgi', fields=webserv_log)
+            self.client.metlog('wsgi', fields=webserv_log)
 
         with thread_context(send_logmsg):
             return self._fn(*args, **kwargs)

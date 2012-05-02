@@ -26,16 +26,15 @@ import json
 
 class TestDisabledTimers(unittest.TestCase):
     """
-    We want the counter decorators to fire, but the timer decorators
-    should not
+    We want the counter decorators to fire, but the timer decorators should not
     """
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
-        enabled=true
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
-        disable_timeit=true
+        global_disabled_decorators = timeit
+                                     something
         """)))
         settings = {"config": config}
         config = Configurator(settings=settings)
@@ -43,14 +42,10 @@ class TestDisabledTimers(unittest.TestCase):
         config.commit()
 
     def test_only_some_decorators(self):
-        '''
-        decorator ordering may matter when Ops goes to look at the
-        logs. Make sure we capture stuff in the right order
-        '''
         plugin = self.plugin
 
         plugin.client.sender.msgs.clear()
-        assert len(plugin.client.sender.msgs) == 0
+        self.assertEqual(len(plugin.client.sender.msgs), 0)
 
         @incr_count
         @timeit
@@ -59,15 +54,10 @@ class TestDisabledTimers(unittest.TestCase):
 
         no_timer(5, 6)
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
-        assert len(msgs) == 1
+        self.assertEqual(len(msgs), 1)
 
-        for msg in msgs:
-            expected = 'mozsvc.tests.test_partial_disable_metrics:no_timer'
-            actual = msg['fields']['name']
-            assert actual == expected
-
-        # First msg should be counter, then timer as decorators are
-        # applied inside to out, but execution is outside -> in
-        assert msgs[0]['type'] == 'counter'
+        expected = 'mozsvc.tests.test_partial_disable_metrics.no_timer'
+        self.assertEqual(msgs[0]['fields']['name'], expected)
+        self.assertEqual(msgs[0]['type'], 'counter')
 
         plugin.client.sender.msgs.clear()
