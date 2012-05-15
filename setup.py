@@ -14,7 +14,7 @@ requires = ['pyramid', 'simplejson', 'cef']
 tests_requires = requires + [
             'repoze.who.plugins.macauth', 'pyramid_whoauth',
             'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]>=0.8.2',
-            'cornice']
+            'cornice', 'wsgiproxy']
 
 
 setup(name='mozsvc',
