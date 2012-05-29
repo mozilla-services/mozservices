@@ -16,6 +16,7 @@
 
 from StringIO import StringIO
 from metlog.decorators import timeit, incr_count
+from metlog.holder import CLIENT_HOLDER
 from mozsvc.config import Config
 from mozsvc.plugin import load_and_register
 from pyramid.config import Configurator
@@ -29,9 +30,11 @@ class TestDisabledTimers(unittest.TestCase):
     We want the counter decorators to fire, but the timer decorators should not
     """
     def setUp(self):
+        self.orig_globals = CLIENT_HOLDER.global_config.copy()
         config = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
+        logger = test
         sender_class=metlog.senders.DebugCaptureSender
         global_disabled_decorators = timeit
                                      something
@@ -40,6 +43,10 @@ class TestDisabledTimers(unittest.TestCase):
         config = Configurator(settings=settings)
         self.plugin = load_and_register("test1", config)
         config.commit()
+
+    def tearDown(self):
+        CLIENT_HOLDER.delete_client('test')
+        CLIENT_HOLDER.global_config = self.orig_globals
 
     def test_only_some_decorators(self):
         plugin = self.plugin
