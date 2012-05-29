@@ -23,7 +23,6 @@ class TestMetrics(unittest.TestCase):
     def test_loading_from_config(self):
         config = Config(StringIO(dedent("""
         [test1]
-        enabled=true
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.ZmqPubSender
         sender_bindstrs=tcp://localhost:5585
@@ -56,7 +55,6 @@ class TestConfigurationLoading(unittest.TestCase):
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
-        enabled=true
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
@@ -115,7 +113,6 @@ class TestCannedDecorators(unittest.TestCase):
     def setUp(self):
         config = Config(StringIO(dedent("""
         [test1]
-        enabled=true
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
