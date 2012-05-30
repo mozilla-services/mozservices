@@ -21,7 +21,7 @@ import json
 
 class TestMetrics(unittest.TestCase):
     def test_loading_from_config(self):
-        config = Config(StringIO(dedent("""
+        mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.ZmqPubSender
@@ -31,8 +31,8 @@ class TestMetrics(unittest.TestCase):
         [test2]
         dontusethis =  seriously
         """)))
-        settings = {"config": config}
-        plugin = load_from_config("test1", config)
+        settings = {"config": mozconfig}
+        plugin = load_from_config("test1", mozconfig)
         config = Configurator(settings=settings)
         config.commit()
         self.failUnless(isinstance(plugin, MetlogPlugin))
@@ -53,13 +53,13 @@ class TestConfigurationLoading(unittest.TestCase):
     out
     """
     def setUp(self):
-        config = Config(StringIO(dedent("""
+        mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
-        settings = {"config": config}
-        self.plugin = load_from_config("test1", config)
+        settings = {"config": mozconfig}
+        self.plugin = load_from_config("test1", mozconfig)
         config = Configurator(settings=settings)
         config.commit()
 
@@ -111,13 +111,13 @@ class TestConfigurationLoading(unittest.TestCase):
 
 class TestCannedDecorators(unittest.TestCase):
     def setUp(self):
-        config = Config(StringIO(dedent("""
+        mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
-        settings = {"config": config}
-        self.plugin = load_from_config("test1", config)
+        settings = {"config": mozconfig}
+        self.plugin = load_from_config("test1", mozconfig)
         config = Configurator(settings=settings)
         config.commit()
 
@@ -214,13 +214,13 @@ def decorator_override(request):
 
 class TestMetricsService(unittest.TestCase):
     def setUp(self):
-        config = Config(StringIO(dedent("""
+        mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
         sender_class=metlog.senders.DebugCaptureSender
         """)))
-        settings = {"config": config}
-        self.plugin = load_from_config("test1", config)
+        settings = {"config": mozconfig}
+        self.plugin = load_from_config("test1", mozconfig)
         config = Configurator(settings=settings)
         config.commit()
 
