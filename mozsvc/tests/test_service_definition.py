@@ -1,14 +1,19 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+from StringIO import StringIO
+from textwrap import dedent
 import functools
 import unittest
 
 from pyramid import testing
+from pyramid.config import Configurator
 from webtest import TestApp
 
 from cornice.tests import CatchErrors
+from mozsvc.config import Config
 from mozsvc.metrics import MetricsService
+from mozsvc.plugin import load_from_config
 
 service3 = MetricsService(name="service3", path="/service3")
 service4 = MetricsService(name="service4", path="/service4")
@@ -51,7 +56,14 @@ def wrapped_get5(request):
 class TestServiceDefinition(unittest.TestCase):
 
     def setUp(self):
-        self.config = testing.setUp()
+        mozconfig = Config(StringIO(dedent("""
+        [test1]
+        backend = mozsvc.metrics.MetlogPlugin
+        sender_class=metlog.senders.DebugCaptureSender
+        """)))
+        settings = {"config": mozconfig}
+        self.plugin = load_from_config("test1", mozconfig)
+        self.config = Configurator(settings=settings)
         self.config.include("cornice")
         self.config.scan("mozsvc.tests.test_service_definition")
         self.app = TestApp(CatchErrors(self.config.make_wsgi_app()))
