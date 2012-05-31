@@ -44,6 +44,10 @@ def setup_metlog(config_dict, default=False):
         CLIENT_HOLDER.set_default_client_name(name)
 
 
+def teardown_metlog():
+    pass
+
+
 def get_metlog_client(name=None):
     """
     Return the specified Metlog client from the CLIENT_HOLDER.

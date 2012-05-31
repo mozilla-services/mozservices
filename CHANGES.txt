@@ -1,7 +1,10 @@
 0.4 - ?
 =======
 
-???
+- add a tween to log any uncaught exceptions.
+- compatability with latest metlog-py release.
+- add a call counter to default MetlogService decorators.
+
 
 0.3 - 2012-04-18
 ================
