@@ -1,5 +1,5 @@
-0.4 - ?
-=======
+0.4 - 2012-06-01
+================
 
 - add a tween to log any uncaught exceptions.
 - compatability with latest metlog-py release.
