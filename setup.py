@@ -20,7 +20,7 @@ extras_require = {'metlog': ['metlog-py>=0.9']}
 
 
 setup(name='mozsvc',
-      version='0.4',
+      version='0.5',
       description='Various utilities for Mozilla apps',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
