@@ -13,8 +13,10 @@ requires = ['pyramid', 'simplejson', 'cef']
 
 tests_requires = requires + [
             'repoze.who.plugins.macauth', 'pyramid_whoauth',
-            'tokenlib', 'macauthlib', 'metlog-py[zeromqpub]>=0.8.2',
-            'cornice', 'wsgiproxy']
+            'tokenlib', 'macauthlib', 'cornice', 'wsgiproxy',
+            'unittest2']
+
+extras_require = {'metlog': ['metlog-py>=0.9']}
 
 
 setup(name='mozsvc',
@@ -35,6 +37,7 @@ setup(name='mozsvc',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
+      extras_require=extras_require,
       tests_require=tests_requires,
       test_suite="mozsvc",
       paster_plugins=['pyramid'])

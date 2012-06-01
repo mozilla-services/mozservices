@@ -4,7 +4,7 @@
 from StringIO import StringIO
 from textwrap import dedent
 import functools
-import unittest
+import unittest2
 
 from pyramid import testing
 from pyramid.config import Configurator
@@ -12,8 +12,13 @@ from webtest import TestApp
 
 from cornice.tests import CatchErrors
 from mozsvc.config import Config
-from mozsvc.metrics import MetricsService
-from mozsvc.plugin import load_from_config
+metlog = True
+try:
+    from mozsvc.metrics import MetricsService
+    from mozsvc.plugin import load_from_config
+except ImportError:
+    metlog = False
+    from cornice import Service as MetricsService  # NOQA
 
 service3 = MetricsService(name="service3", path="/service3")
 service4 = MetricsService(name="service4", path="/service4")
@@ -53,9 +58,11 @@ def wrapped_get5(request):
     return {"test": "succeeded"}
 
 
-class TestServiceDefinition(unittest.TestCase):
+class TestServiceDefinition(unittest2.TestCase):
 
     def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
         mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin

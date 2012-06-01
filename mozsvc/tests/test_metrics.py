@@ -1,25 +1,33 @@
 from StringIO import StringIO
-from metlog.client import MetlogClient
-from metlog.senders import ZmqPubSender
 from mozsvc.config import Config
-
-from mozsvc.metrics import MetlogPlugin
-from mozsvc.metrics import apache_log
-from mozsvc.metrics import MetricsService
-
-from metlog.decorators import incr_count
-from metlog.decorators import timeit
-
-from mozsvc.metrics import get_tlocal
 from mozsvc.plugin import load_from_config
 from pyramid.config import Configurator
 from textwrap import dedent
 from webob.request import Request
-import unittest
+import unittest2
 import json
 
+metlog = True
+try:
+    from metlog.client import MetlogClient
+    from metlog.senders import ZmqPubSender
+    from metlog.decorators import incr_count
+    from metlog.decorators import timeit
+    from mozsvc.metrics import MetlogPlugin
+    from mozsvc.metrics import apache_log
+    from mozsvc.metrics import MetricsService
+    from mozsvc.metrics import get_tlocal
+except ImportError:
+    metlog = False
+    from cornice import Service as MetricsService  # NOQA
+    timeit = apache_log = incr_count = lambda fn: fn  # NOQA
 
-class TestMetrics(unittest.TestCase):
+
+class TestMetrics(unittest2.TestCase):
+    def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
+
     def test_loading_from_config(self):
         mozconfig = Config(StringIO(dedent("""
         [test1]
@@ -47,12 +55,14 @@ class TestMetrics(unittest.TestCase):
                 ['tcp://localhost:5585', 'tcp://localhost:5586'])
 
 
-class TestConfigurationLoading(unittest.TestCase):
+class TestConfigurationLoading(unittest2.TestCase):
     """
     make sure that DecoratorWrapper works on decorators with arguments and with
     out
     """
     def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
         mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
@@ -109,8 +119,10 @@ class TestConfigurationLoading(unittest.TestCase):
         self.assertEqual(msgs[1]['type'], 'counter')
 
 
-class TestCannedDecorators(unittest.TestCase):
+class TestCannedDecorators(unittest2.TestCase):
     def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
         mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
@@ -212,8 +224,10 @@ def decorator_override(request):
     return 'foo'
 
 
-class TestMetricsService(unittest.TestCase):
+class TestMetricsService(unittest2.TestCase):
     def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
         mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin

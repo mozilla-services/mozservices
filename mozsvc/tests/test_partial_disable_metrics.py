@@ -15,21 +15,28 @@
 # ***** END LICENSE BLOCK *****
 
 from StringIO import StringIO
-from metlog.decorators import timeit, incr_count
-from metlog.holder import CLIENT_HOLDER
 from mozsvc.config import Config
 from mozsvc.plugin import load_and_register
 from pyramid.config import Configurator
 from textwrap import dedent
-import unittest
+import unittest2
 import json
 
+metlog = True
+try:
+    from metlog.decorators import timeit, incr_count
+    from metlog.holder import CLIENT_HOLDER
+except ImportError:
+    metlog = False
 
-class TestDisabledTimers(unittest.TestCase):
+
+class TestDisabledTimers(unittest2.TestCase):
     """
     We want the counter decorators to fire, but the timer decorators should not
     """
     def setUp(self):
+        if not metlog:
+            raise(unittest2.SkipTest('no metlog'))
         self.orig_globals = CLIENT_HOLDER.global_config.copy()
         config = Config(StringIO(dedent("""
         [test1]
