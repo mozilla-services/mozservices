@@ -142,7 +142,7 @@ class SagradaMACAuthPlugin(MACAuthPlugin):
         if host_url.scheme == "http" and host_url.port == 80:
             assert node_name.endswith(":80")
             node_name = node_name[:-3]
-        elif host_url.scheme == "http" and host_url.port == 443:
+        elif host_url.scheme == "https" and host_url.port == 443:
             assert node_name.endswith(":443")
             node_name = node_name[:-4]
         return self.secrets.get(node_name)
