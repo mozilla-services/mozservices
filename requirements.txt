@@ -5,9 +5,7 @@ cef
 unittest2
 WebTest
 WSGIProxy
-repoze.who
-repoze.who/plugins.macauth
-pyramid_whoauth
+pyramid_macauth
 tokenlib
 macauthlib
 metlog-py[zeromqpub]

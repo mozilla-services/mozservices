@@ -47,7 +47,11 @@ get_test_configurator.__test__ = False
 
 def make_request(config, path="/", environ=None, factory=None):
     my_environ = {}
-    my_environ["wsgi.version"] = "1.0"
+    my_environ["wsgi.version"] = (1,0)
+    my_environ["wsgi.multithread"] = True
+    my_environ["wsgi.multiprocess"] = True
+    my_environ["wsgi.run_once"] = False
+    my_environ["wsgi.url_scheme"] = "http"
     my_environ["REQUEST_METHOD"] = "GET"
     my_environ["SCRIPT_NAME"] = ""
     my_environ["PATH_INFO"] = path
@@ -86,7 +90,8 @@ class TestCase(unittest2.TestCase):
         return config
 
     def make_request(self, *args, **kwds):
-        return make_request(self.config, *args, **kwds)
+        config = kwds.pop("config", self.config)
+        return make_request(config, *args, **kwds)
 
 
 class FunctionalTestCase(TestCase):

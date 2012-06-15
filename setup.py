@@ -12,9 +12,8 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
 requires = ['pyramid', 'simplejson', 'cef']
 
 tests_requires = requires + [
-            'repoze.who.plugins.macauth', 'pyramid_whoauth',
-            'tokenlib', 'macauthlib', 'cornice', 'wsgiproxy',
-            'unittest2']
+            'pyramid_macauth', 'tokenlib', 'macauthlib',
+            'cornice', 'wsgiproxy', 'unittest2']
 
 extras_require = {'metlog': ['metlog-py>=0.9']}
 

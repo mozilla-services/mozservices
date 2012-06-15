@@ -1,7 +1,8 @@
 0.5
 ===
 
-???
+- remove use of repoze.who for authentication; all auth is now done
+  using standard pyramid plugins.
 
 
 0.4 - 2012-06-01

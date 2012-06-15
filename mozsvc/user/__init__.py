@@ -4,39 +4,31 @@
 # file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 # ***** END LICENSE BLOCK *****
+"""
 
+Utilities for authentication via the Sagrada auth system.
 
 """
 
-Utilities for authentication via a generic user backend.
-
-Include mozsvc.user into your pyramid config to get the following niceties:
-
-    * user database backend loaded as a plugin from "auth" config section
-    * user database backend available as request.registry["auth"]
-    * authenticated user's data as a dict at request.user
-
-You can also use the function mozsvc.user.authenticate(req, creds) as a
-shortcut for authenticating against the configured backend, which is useful
-for writing your own authentication plugins.
-
-This module is also designed to "play nice" with authentication schemes using
-repoze.who and the pyramid_whoauth package.  For example, the request.user
-attribute actually just exposes environ["repoze.who.identity"].  For some
-additional integration with pyramid_whoauth, see the mozsvc.user.whoauth
-module.
-
-"""
+from zope.interface import implements
 
 from pyramid.request import Request
 from pyramid.security import authenticated_userid
+from pyramid.authorization import ACLAuthorizationPolicy
+from pyramid.interfaces import IAuthenticationPolicy
 
-from cef import log_cef, AUTH_FAILURE
+from pyramid_macauth import MACAuthenticationPolicy
 
-from mozsvc.plugin import load_and_register
+import tokenlib
+
+import mozsvc
+import mozsvc.secrets
 
 import logging
 logger = logging.getLogger("mozsvc.user")
+
+
+ENVIRON_KEY_IDENTITY = "mozsvc.user.identity"
 
 
 class RequestWithUser(Request):
@@ -51,125 +43,133 @@ class RequestWithUser(Request):
     be an empty dict.  If the call to authenticated_userid() raises an error
     it will *not* be intercepted, you will receive it as an error from the
     attribute access attempt.
-
-    This class also provides some conveniences for integrating with repoze.who,
-    by storing the registry and user object in the WSGI environ rather than on
-    the request object itself.  This lets us write repoze.who plugins that can
-    access the higher-level pyramid config data.
     """
-
-    # Expose the "repoze.who.identity" dict as request.user.
-    # This allows for convenient integration between pyramid-level code
-    # and repoze.who plugins.
 
     def _get_user(self):
         # Return an existing identity if there is one.
-        user = self.environ.get("repoze.who.identity")
+        user = self.environ.get(ENVIRON_KEY_IDENTITY)
         if user is not None:
             return user
-
-        # Return an under-construction identity if there is one.
-        # This lets pyramid-level auth plugins store stuff in req.user.
-        user = self.environ.get("mozsvc.user.temp_user")
-        if user is not None:
-            return user
-
-        # Otherwise, we need to authenticate.
-        # Do it through the standard pyramid interface, while providing an
-        # under-construction user dict for plugins to scribble on.
-        extra = self.environ["mozsvc.user.temp_user"] = {}
+        # Put an empty identity dict in place before calling the authn policy.
+        # This lets the policy store stuff in req.user.
+        user = self.environ[ENVIRON_KEY_IDENTITY] = {}
+        # Call the standard authn framework to authenticate.
         try:
-            username = authenticated_userid(self)
-        finally:
-            self.environ.pop("mozsvc.user.temp_user", None)
-
-        # Now that we've authed, cached the result as repoze.who.identity.
-        # For a successful auth it might already exist.  For a failed auth
-        # we set it to the empty dict.
-        user = self.environ.get("repoze.who.identity")
-        if user is None:
-            user = self.environ["repoze.who.identity"] = {}
-
-        # If the auth was successful, make sure the identity contains
-        # all the expected keys.
-        if username is not None:
-            user.update(extra)
-            user.setdefault("username", username)
-            user.setdefault("repoze.who.userid", username)
+            userid = authenticated_userid(self)
+        except Exception:
+            self.environ.pop(ENVIRON_KEY_IDENTITY, None)
+            raise
+        # If the auth was successful, store the userid in the identity.
+        if userid is not None:
+            user.setdefault("uid", userid)
         return user
 
     def _set_user(self, user):
-        self.environ["repoze.who.identity"] = user
+        self.environ["mozsvc.user.identity"] = user
 
     user = property(_get_user, _set_user)
 
-    # Store the pyramid application registry in the WSGI environ.
-    # This allows repoze.who plugins to access pyramid config despite
-    # the fact that they aren't passed a request object.
 
-    def _get_registry(self):
-        try:
-            return self.environ["mozsvc.user.registry"]
-        except KeyError:
-            raise AttributeError("registry")
+class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
+    """Pyramid authentication policy for use with Sagrada auth tokens.
 
-    def _set_registry(self, registry):
-        self.environ["mozsvc.user.registry"] = registry
-        self.__dict__["registry"] = registry
+    This class provides an IAuthenticationPolicy implementation based on
+    Sagrada authentication tokens as described here:
 
-    registry = property(_get_registry, _set_registry)
+        https://wiki.mozilla.org/Services/Sagrada/TokenServer
 
-
-def authenticate(request, credentials, attrs=()):
-    """Authenticate a dict of credentials against the configured user backend.
-
-    This is a handy callback that you can use to check a dict of credentials
-    against the configured auth backend.  It will accept credentials from any
-    of the auth schemes supported by the backend.  If the authentication is
-    successful it will update request.user with the user object loaded from
-    the backend.
+    For verification of token signatures, this plugin can use either a
+    single fixed secret (via the argument 'secret') or a file mapping
+    node hostnames to secrets (via the argument 'secrets_file').  The
+    two arguments are mutually exclusive.
     """
-    # Use whatever auth backend has been configured.
-    auth = request.registry.get("auth")
-    if auth is None:
-        return False
 
-    # Update an existing user object if one exists on the request.
-    user = getattr(request, "user", None)
-    if user is None:
-        user = {}
+    implements(IAuthenticationPolicy)
 
-    # Ensure that we have credentials["username"] for use by the backend.
-    # Some repoze.who plugins like to use "login" instead of "username".
-    if "username" not in credentials:
-        if "login" in credentials:
-            credentials["username"] = credentials.pop("login")
+    def __init__(self, secret=None, secrets_file=None, **kwds):
+        if secret is not None and secrets_file is not None:
+            msg = "Can only specify one of 'secret' or 'secrets_file'"
+            raise ValueError(msg)
+        elif secret is None and secrets_file is None:
+            # Using secret=None will cause tokenlib to use a randomly-generated
+            # secret.  This is useful for getting started without having to
+            # twiddle any configuration files, but probably not what anyone
+            # wants to use long-term.
+            msgs = ["WARNING: using a randomly-generated token secret.",
+                    "You probably want to set 'secret' or 'secrets_file' in"
+                    "the [macauth] section of your configuration"]
+            for msg in msgs:
+                mozsvc.logger.warn(msg)
+        if secrets_file is not None:
+            self.secret = None
+            self.secrets = mozsvc.secrets.Secrets(secrets_file)
         else:
-            log_cef("Authentication attemped without username", 5,
-                    request.environ, request.registry.settings,
-                    "", signature=AUTH_FAILURE)
-            return False
+            self.secret = secret
+            self.secrets = None
+        super(SagradaAuthenticationPolicy, self).__init__(**kwds)
 
-    # Normalize the password, if any, to be unicode.
-    password = credentials.get("password")
-    if password is not None and not isinstance(password, unicode):
-        try:
-            credentials["password"] = password.decode("utf8")
-        except UnicodeDecodeError:
-            return None
+    @classmethod
+    def _parse_settings(cls, settings):
+        """Parse settings for an instance of this class."""
+        supercls = super(SagradaAuthenticationPolicy, cls)
+        kwds = supercls._parse_settings(settings)
+        for setting in ("secret", "secrets_file"):
+            if setting in settings:
+                kwds[setting] = settings.pop(setting)
+        return kwds
 
-    # Authenticate against the configured backend.
-    if not auth.authenticate_user(user, credentials, attrs):
-        log_cef("Authentication Failed", 5,
-                request.environ, request.registry.settings,
-                credentials["username"],
-                signature=AUTH_FAILURE)
-        return False
+    def decode_mac_id(self, request, tokenid):
+        """Decode a MACAuth token id into its userid and MAC secret key.
 
-    # Store the user dict on the request, and return it for conveience.
-    if getattr(request, "user", None) is None:
-        request.user = user
-    return user
+        This method determines the appropriate secrets to use for the given
+        request, then passes them on to tokenlib to handle the given MAC id
+        token.
+
+        If the id is invalid then ValueError will be raised.
+        """
+        # There might be multiple secrets in use, if we're in the
+        # process of transitioning from one to another.  Try each
+        # until we find one that works.
+        secrets = self._get_token_secrets(request)
+        for secret in secrets:
+            try:
+                data = tokenlib.parse_token(tokenid, secret=secret)
+                userid = data["uid"]
+                key = tokenlib.get_token_secret(tokenid, secret=secret)
+                break
+            except (ValueError, KeyError):
+                pass
+        else:
+            raise ValueError("invalid MAC id")
+        return userid, key
+
+    def encode_mac_id(self, request, userid):
+        """Encode the given userid into a MAC id and secret key.
+
+        This method is essentially the reverse of decode_mac_id.  It is
+        not needed for consuming authentication tokens, but is very useful
+        when building them for testing purposes.
+        """
+        # There might be multiple secrets in use, if we're in the
+        # process of transitioning from one to another.  Always use
+        # the last one aka the "most recent" secret.
+        secret = self._get_token_secrets(request)[-1]
+        tokenid = tokenlib.make_token({"uid": userid}, secret=secret)
+        key = tokenlib.get_token_secret(tokenid, secret=secret)
+        return tokenid, key
+
+    def _get_token_secrets(self, request):
+        """Get the list of possible secrets for signing tokens."""
+        if self.secrets is None:
+            return [self.secret]
+        # Secrets are looked up by hostname.
+        # We need to normalize some port information for this work right.
+        node_name = request.host_url
+        if node_name.startswith("http:") and node_name.endswith(":80"):
+            node_name = node_name[:-3]
+        elif node_name.startswith("https:") and node_name.endswith(":443"):
+            node_name = node_name[:-4]
+        return self.secrets.get(node_name)
 
 
 def includeme(config):
@@ -179,12 +179,23 @@ def includeme(config):
     Things configured include:
 
         * use RequestWithUser as the request object factory
-        * load a user database backend from config section "auth"
+        * use SagradaAuthenticationPolicy as the default authn policy
 
     """
+    # Use RequestWithUser as the request object factory.
     config.set_request_factory(RequestWithUser)
-    try:
-        config.registry["auth"] = load_and_register("auth", config)
-    except Exception, e:
-        logger.warning("Unable to load auth backend. Problem? %s" % e)
-        config.registry["auth"] = None
+
+    # Hook up a default AuthorizationPolicy.
+    # ACLAuthorizationPolicy is usually what you want.
+    # If the app configures one explicitly then this will get overridden.
+    # In auto-commit mode this needs to be set before adding an authn policy.
+    authz_policy = ACLAuthorizationPolicy()
+    config.set_authorization_policy(authz_policy)
+
+    # Build a SagradaAuthenticationPolicy from the deployment settings.
+    settings = config.get_settings()
+    authn_policy = SagradaAuthenticationPolicy.from_settings(settings)
+    config.set_authentication_policy(authn_policy)
+
+    # Set the forbidden view to use the challenge() method from the policy.
+    config.add_forbidden_view(authn_policy.challenge)
