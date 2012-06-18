@@ -122,4 +122,5 @@ class FunctionalTestCase(TestCase):
             "wsgi.url_scheme": host_url.scheme or "http",
             "SERVER_NAME": host_url.hostname,
             "REMOTE_ADDR": "127.0.0.1",
+            "SCRIPT_NAME": host_url.path,
         })
