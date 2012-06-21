@@ -1,5 +1,5 @@
 from StringIO import StringIO
-from mozsvc.config import Config
+from mozsvc.config import Config, get_configurator
 from mozsvc.plugin import load_from_config
 from pyramid.config import Configurator
 from textwrap import dedent
@@ -11,12 +11,14 @@ metlog = True
 try:
     from metlog.client import MetlogClient
     from metlog.senders import ZmqPubSender
+    from metlog.senders.logging import StdLibLoggingSender
     from metlog.decorators import incr_count
     from metlog.decorators import timeit
     from mozsvc.metrics import MetlogPlugin
     from mozsvc.metrics import apache_log
     from mozsvc.metrics import MetricsService
     from mozsvc.metrics import get_tlocal
+    from mozsvc.metrics import load_metlog_client
 except ImportError:
     metlog = False
     from cornice import Service as MetricsService  # NOQA
@@ -54,6 +56,22 @@ class TestMetrics(unittest2.TestCase):
         self.assertEquals(bindstrs, \
                 ['tcp://localhost:5585', 'tcp://localhost:5586'])
 
+    def test_loading_from_configurator_with_default_sender(self):
+        config = get_configurator({})
+        client = load_metlog_client(config)
+        self.failUnless(isinstance(client.sender, StdLibLoggingSender))
+
+    def test_loading_from_configurator_with_explicit_sender(self):
+        config = get_configurator({}, **{
+            "metlog.backend": "mozsvc.metrics.MetlogPlugin",
+            "metlog.sender_class": "metlog.senders.ZmqPubSender",
+            "metlog.sender_bindstrs": "tcp://localhost:5585",
+        })
+        client = load_metlog_client(config)
+        self.failUnless(isinstance(client.sender, ZmqPubSender))
+        bindstrs = client.sender.pool.socket().connect_bind
+        self.assertEquals(bindstrs, ['tcp://localhost:5585'])
+                
 
 class TestConfigurationLoading(unittest2.TestCase):
     """

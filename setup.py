@@ -15,7 +15,7 @@ tests_requires = requires + [
             'pyramid_macauth', 'tokenlib', 'macauthlib',
             'cornice', 'wsgiproxy', 'unittest2']
 
-extras_require = {'metlog': ['metlog-py>=0.9']}
+extras_require = {'metlog': ['metlog-py>=0.9.1']}
 
 
 setup(name='mozsvc',

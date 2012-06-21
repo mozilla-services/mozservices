@@ -20,10 +20,22 @@ from metlog.config import client_from_dict_config
 from metlog.decorators import timeit, incr_count
 from metlog.decorators.base import MetlogDecorator
 from metlog.holder import CLIENT_HOLDER
+from metlog.logging import hook_logger
+from metlog.senders.logging import StdLibLoggingSender
 import threading
+
+from mozsvc.plugin import load_from_settings
 
 
 _LOCAL_STORAGE = threading.local()
+
+
+# Default settings to use when there is no "metlog" section in the config file.
+DEFAULT_METLOG_SETTINGS = {
+    "metlog.backend": "mozsvc.metrics.MetlogPlugin",
+    "metlog.sender_class": "metlog.senders.logging.StdLibLoggingSender",
+    "metlog.sender_json_types": [],
+}
 
 
 def setup_metlog(config_dict, default=False):
@@ -66,6 +78,29 @@ class MetlogPlugin(object):
     def __init__(self, **kwargs):
         setup_metlog(kwargs)
         self.client = CLIENT_HOLDER.default_client
+
+
+def load_metlog_client(config):
+    """Load and return a metlog client for the given Pyramid Configurator.
+
+    This is a shortcut function to load and return the metlog client specified
+    by the given Pyramid Configurator object.  If the configuration does not
+    specify any metlog settings, a default client is constructed that routes
+    all messages into the stdlib logging routines.
+
+    The metlog client is cached in the Configurator's registry, so multiple
+    calls to this function will return a single instance.
+    """
+    settings = config.registry.settings
+    client = config.registry.get("metlog")
+    if client is None:
+        if "metlog.backend" not in settings:
+            settings.update(DEFAULT_METLOG_SETTINGS)
+        client = load_from_settings('metlog', settings).client
+        config.registry['metlog'] = client
+        if not isinstance(client.sender, StdLibLoggingSender):
+            hook_logger("mozsvc", client)
+    return client
 
 
 def get_tlocal():
