@@ -71,7 +71,7 @@ class TestMetrics(unittest2.TestCase):
         self.failUnless(isinstance(client.sender, ZmqPubSender))
         bindstrs = client.sender.pool.socket().connect_bind
         self.assertEquals(bindstrs, ['tcp://localhost:5585'])
-                
+
 
 class TestConfigurationLoading(unittest2.TestCase):
     """

@@ -47,7 +47,7 @@ get_test_configurator.__test__ = False
 
 def make_request(config, path="/", environ=None, factory=None):
     my_environ = {}
-    my_environ["wsgi.version"] = (1,0)
+    my_environ["wsgi.version"] = (1, 0)
     my_environ["wsgi.multithread"] = True
     my_environ["wsgi.multiprocess"] = True
     my_environ["wsgi.run_once"] = False

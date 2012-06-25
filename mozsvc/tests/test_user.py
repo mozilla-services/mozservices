@@ -5,22 +5,18 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 # ***** END LICENSE BLOCK *****
 
-import unittest
 import tempfile
 
 from zope.interface import implements
 
 import pyramid.testing
 import pyramid.request
-from pyramid.interfaces import IRequestFactory, IAuthenticationPolicy
-from pyramid.authorization import ACLAuthorizationPolicy
+from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.security import authenticated_userid
-from pyramid.request import Request
 
 import tokenlib
 import macauthlib
 
-import mozsvc.user
 from mozsvc.tests.support import TestCase
 
 
@@ -36,13 +32,13 @@ class ExpandoRequest(object):
         self.__dict__["_ExpandoRequest__req"] = req
 
     def __getattr__(self, attr):
-        return getattr(self.__req, attr) 
+        return getattr(self.__req, attr)
 
     def __setattr__(self, attr, value):
         try:
             setattr(self.__req, attr, value)
         except AttributeError:
-            self.__dict__[attr] =  value
+            self.__dict__[attr] = value
 
 
 class StubAuthenticationPolicy(object):
