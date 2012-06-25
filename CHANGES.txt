@@ -3,6 +3,8 @@
 
 - remove use of repoze.who for authentication; all auth is now done
   using standard pyramid plugins.
+- add "load_metlog_client" function for loading a metlog client from a
+  Configurator, with sensible defaults when no explicit backend is configured.
 
 
 0.4 - 2012-06-01
