@@ -5,6 +5,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 # ***** END LICENSE BLOCK *****
 
+import time
+import unittest2
 import tempfile
 
 from zope.interface import implements
@@ -18,7 +20,14 @@ from pyramid.httpexceptions import HTTPUnauthorized
 import tokenlib
 import macauthlib
 
+from mozsvc.exceptions import BackendError
 from mozsvc.tests.support import TestCase
+
+try:
+    from mozsvc.user.noncecache import MemcachedNonceCache
+    MEMCACHED = True
+except ImportError:
+    MEMCACHED = False
 
 
 DEFAULT_SETTINGS = {
@@ -251,3 +260,46 @@ class UserTestCase(TestCase):
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+
+
+class TestMemcachedNonceCache(unittest2.TestCase):
+
+    def setUp(self):
+        self.nc = None
+
+    def tearDown(self):
+        if self.nc is not None:
+            self.nc.mcclient.flush_all()
+
+    def test_operation(self, now=lambda: int(time.time())):
+        if not MEMCACHED:
+            raise unittest2.SkipTest("no memcache")
+        ttl = 1
+        nc = self.nc = MemcachedNonceCache(nonce_ttl=ttl)
+        # Initially nothing is cached, so all nonces as fresh.
+        try:
+            self.assertTrue(nc.check_nonce("id", now(), "abc"))
+        except BackendError:
+            raise unittest2.SkipTest("no memcache")
+        # After adding a nonce, that nonce should no longer be fresh.
+        self.assertFalse(nc.check_nonce("id", now(), "abc"))
+        self.assertTrue(nc.check_nonce("id", now(), "xyz"))
+        # After the ttl passes, the nonce should be expired.
+        # Unfortunately memcached only supports integer ttls, so the
+        # smallest amount of time we can sleep here is 1 second.
+        time.sleep(ttl)
+        self.assertTrue(nc.check_nonce("id", now(), "abc"))
+        # If the timestamp is too old, even a fresh nonce will fail the check.
+        self.assertFalse(nc.check_nonce("id", now() - 2 * ttl, "def"))
+        self.assertFalse(nc.check_nonce("id", now() + 2 * ttl, "def"))
+        self.assertTrue(nc.check_nonce("id", now(), "def"))
+
+    def test_operation_with_backward_clock_skew(self):
+        def now():
+            return int(time.time()) - 13
+        self.test_operation(now=now)
+
+    def test_operation_with_forward_clock_skew(self):
+        def now():
+            return int(time.time()) + 7
+        self.test_operation(now=now)
