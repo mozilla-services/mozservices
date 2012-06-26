@@ -60,8 +60,10 @@ class Config(RawConfigParser):
         # let's read the file
         RawConfigParser.__init__(self)
         if isinstance(filename, basestring):
+            self.filename = filename
             self.read(filename)
         else:
+            self.filename = None
             self.readfp(filename)
 
     def _read(self, fp, filename):
@@ -71,7 +73,7 @@ class Config(RawConfigParser):
         # let's expand it now if needed
         defaults = self.defaults()
 
-        if'extends' in defaults:
+        if 'extends' in defaults:
             extends = defaults['extends']
             if not isinstance(extends, list):
                 extends = [extends]
@@ -91,7 +93,10 @@ class Config(RawConfigParser):
         return value
 
     def _unserialize(self, value):
-        """values are serialized on every get"""
+        """values are unserialized on every get"""
+        if self.filename is not None:
+            here_path = os.path.dirname(self.filename)
+            value = value.replace("%(here)s", here_path)
         return convert(value)
 
     def get_map(self, section=None):
@@ -130,12 +135,14 @@ class Config(RawConfigParser):
             raise IOError('No such file: %s' % filename)
         parser = RawConfigParser()
         parser.read([filename])
+        here_path = os.path.dirname(filename)
         for section in parser.sections():
             if not self.has_section(section):
                 self.add_section(section)
             for option, value in parser.items(section):
                 if self.has_option(section, option):
                     continue
+                value = value.replace("%(here)s", here_path)
                 RawConfigParser.set(self, section, option, value)
 
 

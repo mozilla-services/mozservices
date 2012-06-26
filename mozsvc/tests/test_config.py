@@ -28,6 +28,7 @@ lines = 1
         3
 
 env = some ${__STUFF__}
+location = %%(here)s
 
 [two]
 a = b
@@ -40,6 +41,7 @@ two = "a"
 
 [three]
 more = stuff
+location = %(here)s
 """
 
 _FILE_THREE = """\
@@ -197,3 +199,11 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEquals(settings.getsection("b"), {"three": 3})
         self.assertEquals(settings.getsection("c"), {})
         self.assertEquals(settings.getsection(""), {"four": 4, "new": "key"})
+
+    def test_location_interpolation(self):
+        config = Config(self.file_one)
+        # file_one is a StringIO, so it has no location.
+        self.assertEquals(config.get('one', 'location'), '%(here)s')
+        # file_two is a real file, so it has a location.
+        file_two_loc = os.path.dirname(self.file_two)
+        self.assertEquals(config.get('three', 'location'), file_two_loc)
