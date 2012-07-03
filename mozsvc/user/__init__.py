@@ -16,10 +16,13 @@ from pyramid.request import Request
 from pyramid.security import authenticated_userid
 from pyramid.authorization import ACLAuthorizationPolicy
 from pyramid.interfaces import IAuthenticationPolicy
+from pyramid.httpexceptions import HTTPUnauthorized
 
 from pyramid_macauth import MACAuthenticationPolicy
 
 import tokenlib
+
+from cef import log_cef, AUTH_FAILURE
 
 import mozsvc
 import mozsvc.secrets
@@ -118,6 +121,25 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
                 kwds[setting] = settings.pop(setting)
         return kwds
 
+    def _check_signature(self, request, key):
+        """Check the MACAuth signature on the request.
+
+        This method checks the MAC signature on the request against the
+        supplied signing key.  If missing or invalid then HTTPUnauthorized
+        is raised.
+
+        The SagradaAuthenticationPolicy implementation wraps the default
+        MACAuthenticationPolicy implementation with some cef logging.
+        """
+        supercls = super(SagradaAuthenticationPolicy, self)
+        try:
+            return supercls._check_signature(request, key)
+        except HTTPUnauthorized:
+            log_cef("Authentication Failed: invalid MAC signature", 5,
+                    request.environ, request.registry.settings,
+                    "", signature=AUTH_FAILURE)
+            raise
+
     def decode_mac_id(self, request, tokenid):
         """Decode a MACAuth token id into its userid and MAC secret key.
 
@@ -140,6 +162,9 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
             except (ValueError, KeyError):
                 pass
         else:
+            log_cef("Authentication Failed: invalid MAC id", 5,
+                    request.environ, request.registry.settings,
+                    "", signature=AUTH_FAILURE)
             raise ValueError("invalid MAC id")
         return userid, key
 

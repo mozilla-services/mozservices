@@ -13,11 +13,22 @@ import pyramid.testing
 import pyramid.request
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.security import authenticated_userid
+from pyramid.httpexceptions import HTTPUnauthorized
 
 import tokenlib
 import macauthlib
 
 from mozsvc.tests.support import TestCase
+
+
+DEFAULT_SETTINGS = {
+    'cef.vendor': 'mozilla',
+    'cef.device_version': '1.3',
+    'cef.product': 'weave',
+    'cef.use': True,
+    'cef.version': 0,
+   'cef.file': 'syslog',
+}
 
 
 class ExpandoRequest(object):
@@ -81,6 +92,7 @@ class UserTestCase(TestCase):
 
     def get_configurator(self):
         config = super(UserTestCase, self).get_configurator()
+        config.add_settings(DEFAULT_SETTINGS)
         config.include("mozsvc.user")
         return config
 
@@ -124,9 +136,9 @@ class UserTestCase(TestCase):
         macauthlib.sign_request(req, tokenid, key)
         authz = req.environ["HTTP_AUTHORIZATION"]
         req.environ["HTTP_AUTHORIZATION"] = authz.replace(tokenid, "XXXXXX")
-        self.assertRaises(Exception, authenticated_userid, req)
+        self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
         # And that the rejection gets raised when accessing request.user
-        self.assertRaises(Exception, getattr, req, "user")
+        self.assertRaises(HTTPUnauthorized, getattr, req, "user")
 
     def test_that_req_user_can_be_replaced(self):
         req = self.make_request()
@@ -137,6 +149,7 @@ class UserTestCase(TestCase):
 
     def test_that_macauth_cant_use_both_secret_and_secrets_file(self):
         config2 = pyramid.testing.setUp()
+        config2.add_settings(DEFAULT_SETTINGS)
         config2.add_settings({
             "macauth.secret": "DARTH VADER IS LUKE'S FATHER",
             "macauth.secrets_file": "/dev/null",
@@ -152,6 +165,7 @@ class UserTestCase(TestCase):
             sf.flush()
             # Configure the plugin to load them.
             config2 = pyramid.testing.setUp()
+            config2.add_settings(DEFAULT_SETTINGS)
             config2.add_settings({
                 "macauth.secrets_file": sf.name,
             })
@@ -180,7 +194,7 @@ class UserTestCase(TestCase):
             id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
-            self.assertRaises(Exception, authenticated_userid, req)
+            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
             # It should reject a request over plain http when host2 is ssl.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
@@ -188,7 +202,7 @@ class UserTestCase(TestCase):
             id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             macauthlib.sign_request(req, id, key)
-            self.assertRaises(Exception, authenticated_userid, req)
+            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
             # It should accept a request signed with the new secret on host2.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
@@ -236,4 +250,4 @@ class UserTestCase(TestCase):
             id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             macauthlib.sign_request(req, id, key)
-            self.assertRaises(Exception, authenticated_userid, req)
+            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
