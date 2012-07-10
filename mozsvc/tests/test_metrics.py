@@ -15,10 +15,10 @@ try:
     from metlog.decorators import incr_count
     from metlog.decorators import timeit
     from mozsvc.metrics import MetlogPlugin
-    from mozsvc.metrics import apache_log
     from mozsvc.metrics import MetricsService
-    from mozsvc.metrics import get_tlocal
     from mozsvc.metrics import load_metlog_client
+    from mozsvc.metrics import send_mozsvc_data
+    from mozsvc.metrics import update_mozsvc_data
 except ImportError:
     metlog = False
     from cornice import Service as MetricsService  # NOQA
@@ -198,17 +198,15 @@ class TestCannedDecorators(unittest2.TestCase):
         self.assertEqual(msgs[0]['type'], 'counter')
         self.assertEqual(msgs[1]['type'], 'timer')
 
-    def test_apache_logger(self):
-
+    def test_mozsvc_data(self):
         plugin = self.plugin
         plugin.client.sender.msgs.clear()
         msgs = plugin.client.sender.msgs
         self.assertEqual(len(msgs), 0)
 
-        @apache_log
+        @send_mozsvc_data
         def some_method(request):
-            data = get_tlocal()
-            data['foo'] = 'bar'
+            update_mozsvc_data({'foo': 'bar'})
 
         req = Request({'PATH_INFO': '/foo/bar',
                        'SERVER_NAME': 'somehost.com',
@@ -216,16 +214,22 @@ class TestCannedDecorators(unittest2.TestCase):
                        })
         some_method(req)
         msg = json.loads(plugin.client.sender.msgs[0])
-        self.assertTrue('foo' in msg['fields']['threadlocal'])
-        self.assertEqual(msg['fields']['threadlocal']['foo'], 'bar')
+        self.assertTrue('foo' in msg['fields'])
+        self.assertEqual(msg['fields']['foo'], 'bar')
 
 
 user_info = MetricsService(name='users', path='/{username}/info',
                            description='some_svc')
 
 
-@user_info.get(decorators=[timeit, apache_log])
+@user_info.get(decorators=[timeit, send_mozsvc_data])
 def get_info(request):
+    return 'foo'
+
+
+@user_info.get(decorators=[timeit, send_mozsvc_data])
+def get_info_mozsvc_data(request):
+    update_mozsvc_data({'moe': 'curly'})
     return 'foo'
 
 decorate_all = MetricsService(name='users', path='/{username}/all',
@@ -234,6 +238,7 @@ decorate_all = MetricsService(name='users', path='/{username}/all',
 
 @decorate_all.get()
 def auto_decorate(request):
+    update_mozsvc_data({'baz': 'bawlp'})
     return 'foo'
 
 
@@ -256,7 +261,7 @@ class TestMetricsService(unittest2.TestCase):
         config = Configurator(settings=settings)
         config.commit()
 
-    def test_metrics_service(self):
+    def test_metrics_service_get(self):
         req = Request({'PATH_INFO': '/foo/info',
                        'SERVER_NAME': 'somehost.com',
                        'SERVER_PORT': 80,
@@ -266,9 +271,22 @@ class TestMetricsService(unittest2.TestCase):
 
         plugin = self.plugin
         msgs = [json.loads(m) for m in plugin.client.sender.msgs]
+        self.assertEqual(len(msgs), 1)
+        self.assertTrue('timer' in [m['type'] for m in msgs])
+
+    def test_metrics_service_get_mozsvc_data(self):
+        req = Request({'PATH_INFO': '/foo/info',
+                       'SERVER_NAME': 'somehost.com',
+                       'SERVER_PORT': 80,
+                       })
+        resp = get_info_mozsvc_data(req)
+        self.assertEqual(resp, 'foo')
+
+        plugin = self.plugin
+        msgs = [json.loads(m) for m in plugin.client.sender.msgs]
         self.assertEqual(len(msgs), 2)
         self.assertTrue('timer' in [m['type'] for m in msgs])
-        self.assertTrue('wsgi' in [m['type'] for m in msgs])
+        self.assertTrue('mozsvc' in [m['type'] for m in msgs])
 
     def test_decorate_at_constructor(self):
         req = Request({'PATH_INFO': '/foo/all',
@@ -284,7 +302,7 @@ class TestMetricsService(unittest2.TestCase):
         self.assertEqual(len(msgs), 3)
         self.assertTrue('timer' in msg_types)
         self.assertTrue('counter' in msg_types)
-        self.assertTrue('wsgi' in msg_types)
+        self.assertTrue('mozsvc' in msg_types)
 
     def test_decorator_override(self):
         req = Request({'PATH_INFO': '/foo/all',

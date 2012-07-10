@@ -132,38 +132,37 @@ def thread_context(callback):
         del _LOCAL_STORAGE.metlog_context_dict
 
 
-class apache_log(MetlogDecorator):
+class send_mozsvc_data(MetlogDecorator):
     """
-    Decorator that can be wrapped around a view method which will extract some
-    information from the WebOb request object and will send a metlog message w/
-    this information when the view method completes.
+    Decorator that can be wrapped around a view method which will check the
+    `metlog_context_dict` threadlocal and, if not empty, generate a metlog
+    message of type `mozsvc` with the contained data.
     """
     def metlog_call(self, *args, **kwargs):
-        req = args[0]
-        headers = req.headers
-
-        wheaders = {}
-        wheaders['User-Agent'] = headers.get('User-Agent', '')
-        wheaders['path'] = getattr(req, 'path', '_no_path_')
-        wheaders['host'] = getattr(req, 'host', '_no_host_')
-        webserv_log = {'headers': wheaders}
-
-        def send_logmsg(tl_data):
+        def send_logmsg(mozsvc_data):
             """
             Stuff the threadlocal data into the message and send it out.
             """
-            webserv_log['threadlocal'] = tl_data
-            self.client.metlog('wsgi', fields=webserv_log)
+            if mozsvc_data:
+                self.client.metlog('mozsvc', fields=mozsvc_data)
 
         with thread_context(send_logmsg):
             return self._fn(*args, **kwargs)
+
+
+def update_mozsvc_data(update_data):
+    """
+    Update the `metlog_context_dict` with data that will be sent out via metlog
+    after request processing.
+    """
+    get_tlocal().update(update_data)
 
 
 class MetricsService(Service):
 
     def __init__(self, **kw):
         self._decorators = kw.pop('decorators', [timeit, incr_count,
-                                                 apache_log])
+                                                 send_mozsvc_data])
         Service.__init__(self, **kw)
 
     def get_view_wrapper(self, kw):
