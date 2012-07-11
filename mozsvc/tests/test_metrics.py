@@ -22,7 +22,7 @@ try:
 except ImportError:
     metlog = False
     from cornice import Service as MetricsService  # NOQA
-    timeit = apache_log = incr_count = lambda fn: fn  # NOQA
+    timeit = send_mozsvc_data = incr_count = lambda fn: fn  # NOQA
 
 
 class TestMetrics(unittest2.TestCase):
