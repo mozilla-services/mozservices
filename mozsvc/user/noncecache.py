@@ -33,6 +33,11 @@ class MemcachedNonceCache(object):
     different webserver processes.  The clock-skew for each id token is
     stored under they key sha1(<id>:skew), while each nonce seen for the id
     is marked by a key sha1(<id>:nonce:<timestamp>:<nonce>).
+
+    NOTE: the "MAC id" here corresponds to the full authentication token
+    issues by the tokenserver, not to the numeric userid of an individual
+    user.  So it is entirely possible to have multiple skew records for
+    each user, corresponding to different active tokens.
     """
 
     def __init__(self, nonce_ttl=None, id_ttl=None, cache_servers=None,
