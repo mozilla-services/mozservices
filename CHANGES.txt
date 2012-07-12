@@ -1,5 +1,9 @@
-0.5
+0.6
 ===
+
+
+0.5 - 2012-07-12
+================
 
 - add "load_metlog_client" function for loading a metlog client from a
   Configurator, with sensible defaults when no explicit backend is configured.
