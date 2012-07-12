@@ -1,10 +1,15 @@
 0.5
 ===
 
-- remove use of repoze.who for authentication; all auth is now done
-  using standard pyramid plugins.
 - add "load_metlog_client" function for loading a metlog client from a
   Configurator, with sensible defaults when no explicit backend is configured.
+- add "update_mozsvc_data" function as a shortcut for adding information
+  to the mozsvc metlog payload.
+- remove use of repoze.who for authentication; all auth is now done using
+  standard pyramid plugins.
+- add MemcachedNonceCache for cross-server nonce management.
+- add mozsvc.storage.mcclient for accessing memcached server(s).
+- add support for %(here)s syntax in config files.
 
 
 0.4 - 2012-06-01
