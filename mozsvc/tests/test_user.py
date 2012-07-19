@@ -265,17 +265,30 @@ class UserTestCase(TestCase):
 class TestMemcachedNonceCache(unittest2.TestCase):
 
     def setUp(self):
+        if not MEMCACHED:
+            raise unittest2.SkipTest("no memcache")
         self.nc = None
+        self.keys_to_delete = set()
 
     def tearDown(self):
         if self.nc is not None:
-            self.nc.mcclient.flush_all()
+            for key in self.keys_to_delete:
+                self.nc.mcclient.delete(key)
+
+    def _monkeypatch_mcclient(self, mcclient):
+        # Ultramemcache has no API for clearing all keys.
+        # Monkeypatch it to remember any keys we use,
+        # so we can delete them during cleanup.
+        orig_add = mcclient.add
+        def add_and_remember(key, *args, **kwds):
+            self.keys_to_delete.add(key)
+            return orig_add(key, *args, **kwds)
+        mcclient.add = add_and_remember
 
     def test_operation(self, now=lambda: int(time.time())):
-        if not MEMCACHED:
-            raise unittest2.SkipTest("no memcache")
         ttl = 1
-        nc = self.nc = MemcachedNonceCache(nonce_ttl=ttl)
+        nc = self.nc = MemcachedNonceCache(nonce_ttl=ttl, id_ttl=10)
+        self._monkeypatch_mcclient(nc.mcclient)
         # Initially nothing is cached, so all nonces as fresh.
         try:
             self.assertTrue(nc.check_nonce("id", now(), "abc"))

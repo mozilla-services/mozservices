@@ -17,7 +17,7 @@ tests_requires = requires + [
 
 extras_require = {
     'metlog': ['metlog-py>=0.9.1'],
-    'memcache': ['pylibmc>=1.2.3'],
+    'memcache': ['umemcache>=1.3'],
 }
 
 

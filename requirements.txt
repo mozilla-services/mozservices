@@ -9,3 +9,4 @@ pyramid_macauth
 tokenlib
 macauthlib
 metlog-py[zeromqpub]
+umemcache
