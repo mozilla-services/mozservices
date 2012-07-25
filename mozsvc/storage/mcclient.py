@@ -18,8 +18,7 @@ import Queue
 
 import pylibmc
 
-from pyramid.threadlocal import get_current_registry
-
+import mozsvc
 from mozsvc.exceptions import BackendError
 
 
@@ -37,18 +36,26 @@ class MemcachedClient(object):
     """
 
     def __init__(self, servers=None, key_prefix="", pool_size=None,
-                 pool_timeout=60, **kwds):
+                 pool_timeout=60, logger=None, **kwds):
         if servers is None:
             servers = ["127.0.0.1:11211"]
         elif isinstance(servers, basestring):
             servers = [servers]
         self.key_prefix = key_prefix
+        self._logger = logger
         master = pylibmc.Client(servers, behaviors={"cas": 1})
         self.pool = MCClientPool(master, pool_size, pool_timeout)
 
     @property
     def logger(self):
-        return get_current_registry()["metlog"]
+        """Property to lazily extract a default logger from runtime environ."""
+        if self._logger is None:
+            try:
+                from pyramid.threadlocal import get_current_registry
+                self._logger = get_current_registry()["metlog"]
+            except (ImportError, KeyError):
+                self._logger = mozsvc.logger
+        return self._logger
 
     @contextlib.contextmanager
     def _connect(self):
