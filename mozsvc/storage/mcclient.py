@@ -15,6 +15,8 @@ import json
 import traceback
 import contextlib
 import Queue
+from collections import defaultdict
+from binascii import crc32
 
 import umemcache
 
@@ -43,13 +45,25 @@ class MemcachedClient(object):
             servers = [servers]
         self.key_prefix = key_prefix
         self._logger = logger
-        # XXX TODO: umemcache doesn't support clustering.
-        # We could implement this ourselves, but is it worth it?
-        if len(servers) > 1:
-            msg = "Multiple servers are not currently supported. "
-            msg += "Consider using moxi for transparent clustering support."
-            raise ValueError(msg)
-        self.pool = MCClientPool(servers[0], pool_size, pool_timeout)
+        self.servers = servers
+        # List to map key hash integers to server names.
+        # Entries in this list may be duplicated based on server weight.
+        self._buckets = []
+        # Dict to map server names to pools of client objects.
+        self._pools = {}
+        # Map each server to a client pool, through the buckets list.
+        for server in self.servers:
+            # Parse out the weight of the server, default to 1.
+            weight = 1
+            if not isinstance(server, basestring):
+                server, weight = server
+            elif "?" in server:
+                server, weight = server.rsplit("?", 1)
+                weight = int(weight)
+            # Create that many bucket slots for the server.
+            self._buckets.extend([server] * weight)
+            # Create a client pool for that server.
+            self._pools[server] = MCClientPool(server, pool_size, pool_timeout)
 
     @property
     def logger(self):
@@ -62,14 +76,28 @@ class MemcachedClient(object):
                 self._logger = mozsvc.logger
         return self._logger
 
+    def _hash_key(self, key):
+        """Hash the given key, for distribution over multiple servers."""
+        return ((((crc32(key) & 0xffffffff) >> 16) & 0x7fff) or 1)
+
+    def _select_server_for_key(self, key):
+        """Select the server to use for the given key."""
+        bucket = self._hash_key(key) % len(self._buckets)
+        return self._buckets[bucket]
+
     @contextlib.contextmanager
-    def _connect(self):
+    def _connect(self, key=None, server=None):
         """Context mananager for getting a connection to memcached."""
+        # Find the right server to connect to.
+        if server is None:
+            assert key is not None
+            server = self._select_server_for_key(key)
         # We could get an error while trying to create a new connection,
         # or when trying to use an existing connection.  This outer
         # try-except handles the logging for both cases.
+        pool = self._pools[server]
         try:
-            with self.pool.reserve() as mc:
+            with pool.reserve() as mc:
                 # If we get an error while using the client object,
                 # disconnect so that it will be removed from the pool.
                 try:
@@ -85,8 +113,9 @@ class MemcachedClient(object):
 
     def get(self, key):
         """Get the value stored under the given key."""
-        with self._connect() as mc:
-            res = mc.get(self.key_prefix + key)
+        key = self.key_prefix + key
+        with self._connect(key) as mc:
+            res = mc.get(key)
         if res is None:
             return None
         data, flags = res
@@ -95,8 +124,9 @@ class MemcachedClient(object):
 
     def gets(self, key):
         """Get the current value and casid for the given key."""
-        with self._connect() as mc:
-            res = mc.gets(self.key_prefix + key)
+        key = self.key_prefix + key
+        with self._connect(key) as mc:
+            res = mc.gets(key)
         if res is None:
             return None, None
         data, flags, casid = res
@@ -105,62 +135,74 @@ class MemcachedClient(object):
 
     def get_multi(self, keys):
         """Get the values stored under the given keys in a single request."""
-        with self._connect() as mc:
-            prefixed_keys = [self.key_prefix + key for key in keys]
-            prefixed_items = mc.get_multi(prefixed_keys)
+        # Split keys into subsets to be fetched from each server.
+        keys_by_server = defaultdict(list)
+        for key in keys:
+            key = self.key_prefix + key
+            server = self._select_server_for_key(key)
+            keys_by_server[server].append(key)
+        # Now issue one multi-get per server.
         items = {}
-        for key, res in prefixed_items.iteritems():
-            assert key.startswith(self.key_prefix)
-            assert res is not None
-            data, flags = res
-            items[key[len(self.key_prefix):]] = json.loads(data)
+        for server, prefixed_keys in keys_by_server.iteritems():
+            with self._connect(server=server) as mc:
+                prefixed_items = mc.get_multi(prefixed_keys)
+            for key, res in prefixed_items.iteritems():
+                assert key.startswith(self.key_prefix)
+                assert res is not None
+                data, flags = res
+                items[key[len(self.key_prefix):]] = json.loads(data)
         return items
 
     def set(self, key, value, time=0):
         """Set the value stored under the given key."""
+        key = self.key_prefix + key
         data = json.dumps(value)
-        with self._connect() as mc:
-            res = mc.set(self.key_prefix + key, data, time)
+        with self._connect(key) as mc:
+            res = mc.set(key, data, time)
         if res != "STORED":
             return False
         return True
 
     def add(self, key, value, time=0):
         """Add the given key to memcached if not already present."""
+        key = self.key_prefix + key
         data = json.dumps(value)
-        with self._connect() as mc:
-            res = mc.add(self.key_prefix + key, data, time)
+        with self._connect(key) as mc:
+            res = mc.add(key, data, time)
         if res != "STORED":
             return False
         return True
 
     def replace(self, key, value, time=0):
         """Replace the given key in memcached if it is already present."""
+        key = self.key_prefix + key
         data = json.dumps(value)
-        with self._connect() as mc:
-            res = mc.replace(self.key_prefix + key, data, time)
+        with self._connect(key) as mc:
+            res = mc.replace(key, data, time)
         if res != "STORED":
             return False
         return True
 
     def cas(self, key, value, casid, time=0):
         """Set the value stored under the given key if casid matches."""
+        key = self.key_prefix + key
         data = json.dumps(value)
-        with self._connect() as mc:
+        with self._connect(key) as mc:
             # Memcached's CAS only works properly on existing keys.
             # Fortunately ADD has the same semantics for missing keys.
             if casid is None:
-                res = mc.add(self.key_prefix + key, data, time)
+                res = mc.add(key, data, time)
             else:
-                res = mc.cas(self.key_prefix + key, data, casid, time)
+                res = mc.cas(key, data, casid, time)
         if res != "STORED":
             return False
         return True
 
     def delete(self, key):
         """Delete the value stored under the given key."""
-        with self._connect() as mc:
-            res = mc.delete(self.key_prefix + key)
+        key = self.key_prefix + key
+        with self._connect(key) as mc:
+            res = mc.delete(key)
         if res != "DELETED":
             return False
         return True
