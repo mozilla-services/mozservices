@@ -43,7 +43,13 @@ class MemcachedClient(object):
             servers = [servers]
         self.key_prefix = key_prefix
         self._logger = logger
-        self.pool = MCClientPool(servers, pool_size, pool_timeout)
+        # XXX TODO: umemcache doesn't support clustering.
+        # We could implement this ourselves, but is it worth it?
+        if len(servers) > 1:
+            msg = "Multiple servers are not currently supported. "
+            msg += "Consider using moxi for transparent clustering support."
+            raise ValueError(msg)
+        self.pool = MCClientPool(servers[0], pool_size, pool_timeout)
 
     @property
     def logger(self):
@@ -187,10 +193,8 @@ class MCClientPool(object):
 
     """
 
-    def __init__(self, servers, maxsize=None, timeout=60):
-        # XXX TODO: umemcache doesn't support clusting
-        assert len(servers) == 1
-        self.servers = servers
+    def __init__(self, server, maxsize=None, timeout=60):
+        self.server = server
         self.maxsize = maxsize
         self.timeout = timeout
         # Use a synchronized Queue class to hold the active client objects.
@@ -216,7 +220,7 @@ class MCClientPool(object):
 
     def _create_client(self):
         """Create a new Client object."""
-        client = umemcache.Client(self.servers[0])
+        client = umemcache.Client(self.server)
         client.connect()
         return client
 
