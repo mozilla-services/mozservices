@@ -256,8 +256,6 @@ class MCClientPool(object):
         """Return a Client object to the pool."""
         # If the connection is now stale, don't return it to the pool.
         # Push an empty slot instead so that it will be refreshed when needed.
-        if not client.is_connected():
-            raise ValueError("HERE")
         if client.is_connected():
             now = int(time.time())
             if ts + self.timeout > now:
