@@ -72,7 +72,12 @@ class MemcachedClient(object):
     def gets(self, key):
         """Get the current value and casid for the given key."""
         with self._connect() as mc:
-            data, casid = mc.gets(self.key_prefix + key)
+            # Some libmemcached setups appear to be buggy here, raising
+            # NotFound instead of returning None.  Work around them.
+            try:
+                data, casid = mc.gets(self.key_prefix + key)
+            except pylibmc.NotFound:
+                data = casid = None
         if data is not None:
             data = json.loads(data)
         return data, casid
