@@ -2,6 +2,13 @@
 ===
 
 
+0.5.1 - 2012-07-27
+==================
+
+- add a workaround for some buggy-seeming pylibmc/libmemcached installs,
+  which raise NotFound instead of returning None in some cases.
+
+
 0.5 - 2012-07-12
 ================
 
