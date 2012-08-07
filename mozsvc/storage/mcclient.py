@@ -135,7 +135,7 @@ class MemcachedClient(object):
         return True
 
     def replace(self, key, value, time=0):
-        """Add the given key to memcached if not already present."""
+        """Replace the given key in memcached if it is already present."""
         data = json.dumps(value)
         with self._connect() as mc:
             res = mc.replace(self.key_prefix + key, data, time)
