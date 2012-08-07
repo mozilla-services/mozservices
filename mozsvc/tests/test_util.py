@@ -10,7 +10,8 @@
 import unittest
 import os.path
 
-from mozsvc.util import round_time, resolve_name, maybe_resolve_name
+from mozsvc.util import (round_time, resolve_name, maybe_resolve_name,
+                         dnslookup)
 
 
 class TestUtil(unittest.TestCase):
@@ -56,3 +57,11 @@ class TestUtil(unittest.TestCase):
         self.assertEquals(os.path, maybe_resolve_name("os.path"))
         self.assertEquals(os.path, maybe_resolve_name(os.path))
         self.assertEquals(None, maybe_resolve_name(None))
+
+    def test_dnslookup(self):
+
+        self.assertEqual(dnslookup('http://ziade.org/'),
+                         'http://88.191.140.69/')
+
+        self.assertEqual(dnslookup('http://user:pass@ziade.org:80/path'),
+                        'http://user:pass@88.191.140.69:80/path')
