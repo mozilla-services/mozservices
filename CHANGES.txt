@@ -1,6 +1,9 @@
 0.6
 ===
 
+- switch to ultramemcache as the backend for mozsvc.storage.mcclient.
+- add mozsvc.utils.dnslookup function.
+
 
 0.5.1 - 2012-07-27
 ==================
