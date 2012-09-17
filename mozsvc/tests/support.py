@@ -120,6 +120,7 @@ class FunctionalTestCase(TestCase):
             self.distant = True
             self.host_url = test_remote
             application = WSGIProxyApp(test_remote)
+            self.config.commit()
 
         host_url = urlparse.urlparse(self.host_url)
         self.app = TestApp(application, extra_environ={
