@@ -115,11 +115,14 @@ class FunctionalTestCase(TestCase):
         if not test_remote:
             self.distant = False
             self.host_url = "http://localhost:5000"
+            # This call implicity commits the configurator.
             application = self.config.make_wsgi_app()
         else:
             self.distant = True
             self.host_url = test_remote
             application = WSGIProxyApp(test_remote)
+            # Explicitly commit so that calling code can introspect the config.
+            self.config.commit()
 
         host_url = urlparse.urlparse(self.host_url)
         self.app = TestApp(application, extra_environ={
