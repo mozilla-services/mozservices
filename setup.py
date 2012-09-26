@@ -1,6 +1,10 @@
 import os
 from setuptools import setup, find_packages
 
+# Importing this up front prevents a pointless error traceback
+# from being printed after running `python setup.py test.`
+import multiprocessing
+
 here = os.path.abspath(os.path.dirname(__file__))
 
 with open(os.path.join(here, 'README.txt')) as f:
