@@ -163,12 +163,17 @@ class MetricsService(Service):
     def __init__(self, **kw):
         self._decorators = kw.pop('decorators', [timeit, incr_count,
                                                  send_mozsvc_data])
+        # To work properly with venusian, we have to specify the number of
+        # frames between the call to venusian.attach and the definition of
+        # the attached function.  Cornice defaults to 1, and we add another.
+        kw.setdefault('depth', 2)
         Service.__init__(self, **kw)
 
-    def get_view_wrapper(self, kw):
+    def decorator(self, method, **kw):
         """
-        Returns a wrapper that will wrap the view callable w/ metlog decorators
-        for timing and logging wsgi variables.
+        Returns a wrapper that will wrap the view callable w/ metlog
+        decorators for timing and logging wsgi variables, then register
+        it with the service definition as a view.
         """
         decorators = kw.pop('decorators', self._decorators)
 
@@ -185,5 +190,7 @@ class MetricsService(Service):
                     func = decorator(func)
                     applied_set.add(decorator)
             func._metlog_decorators = applied_set
+            self.add_view(method, func, **kw)
             return func
+
         return wrapper

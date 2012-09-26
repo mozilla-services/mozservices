@@ -17,7 +17,7 @@ requires = ['pyramid', 'simplejson', 'cef']
 
 tests_requires = requires + [
             'pyramid_macauth', 'tokenlib', 'macauthlib>=0.3.0',
-            'cornice', 'wsgiproxy', 'unittest2']
+            'cornice>=0.10', 'wsgiproxy', 'unittest2']
 
 extras_require = {
     'metlog': ['metlog-py>=0.9.1'],
