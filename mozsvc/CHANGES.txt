@@ -1,0 +1,64 @@
+0.7
+===
+
+Massive refactoring!  Beware all previous users of this code!
+
+
+0.6 - 2012-08-14
+================
+
+- switch to ultramemcache as the backend for mozsvc.storage.mcclient.
+- add mozsvc.utils.dnslookup function.
+
+
+0.5.1 - 2012-07-27
+==================
+
+- add a workaround for some buggy-seeming pylibmc/libmemcached installs,
+  which raise NotFound instead of returning None in some cases.
+
+
+0.5 - 2012-07-12
+================
+
+- add "load_metlog_client" function for loading a metlog client from a
+  Configurator, with sensible defaults when no explicit backend is configured.
+- add "update_mozsvc_data" function as a shortcut for adding information
+  to the mozsvc metlog payload.
+- remove use of repoze.who for authentication; all auth is now done using
+  standard pyramid plugins.
+- add MemcachedNonceCache for cross-server nonce management.
+- add mozsvc.storage.mcclient for accessing memcached server(s).
+- add support for %(here)s syntax in config files.
+
+
+0.4 - 2012-06-01
+================
+
+- add a tween to log any uncaught exceptions.
+- compatability with latest metlog-py release.
+- add a call counter to default MetlogService decorators.
+
+
+0.3 - 2012-04-18
+================
+
+- Removed the hard dependencies from the setup.py file.
+- Secret can load several files now
+- use req.user["uid"] for consistency with tokenserver
+
+
+0.2 - 2012-03-22
+================
+
+- Updated license to MPL 2.0
+- Added mozsvc.user for easy access to auth backends and user data.
+- Added mozsvc.http_helpers for dealing with other HTTP services.
+- Added a tween that turns BackendErrors into HTTP 503 responses.
+- Added some testing helper functions.
+- Added mozsvc.metrics providing first pass at metlog integration.
+
+0.1 - 2011-11-15
+================
+
+- Initial release.
