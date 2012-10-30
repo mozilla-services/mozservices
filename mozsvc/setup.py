@@ -40,4 +40,5 @@ setup(name='mozsvc',
       zip_safe=False,
       install_requires=requires,
       tests_require=tests_require,
+      namespace_packages=['mozsvc'],
       test_suite="mozsvc.tests")
