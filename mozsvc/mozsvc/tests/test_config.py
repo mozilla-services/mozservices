@@ -1,19 +1,20 @@
-# ***** BEGIN LICENSE BLOCK *****
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
-# file,
-# You can obtain one at http://mozilla.org/MPL/2.0/.
-# ***** END LICENSE BLOCK *****
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import unittest
-import tempfile
 import os
+import tempfile
 from StringIO import StringIO
+from textwrap import dedent
 
-from mozsvc.exceptions import EnvironmentNotFoundError
-from mozsvc.config import (Config, SettingsDict, load_into_settings,
-                           get_configurator)
+from mozsvc.config import (ConfigDict, load_config, EnvironmentNotFoundError,
+                           convert_value, create_from_config)
 
+from mozsvc.tests.support import unittest
+
+
+# These are the contents of some test .ini file.
+# They are written out to the fileystem for use during the tests.
 
 _FILE_ONE = """\
 [DEFAULT]
@@ -28,7 +29,6 @@ lines = 1
         3
 
 env = some ${__STUFF__}
-location = %%(here)s
 
 [two]
 a = b
@@ -65,11 +65,11 @@ c = d
 e = f
 g = h
 
-[multi:once]
+[multi.once]
 storage.i = j
 storage.k = l
 
-[multi:thrice]
+[multi.thrice]
 storage.i = jjj
 storage.k = lll
 """
@@ -81,6 +81,59 @@ stuff = True
 [other]
 thing = ok
 """
+
+
+class StubClass(object):
+    """A simple class that just records any keyword arguments."""
+
+    def __init__(self, **kwds):
+        for key, value in kwds.iteritems():
+            setattr(self, key, value)
+
+
+class ConversionTestCase(unittest.TestCase):
+
+    def test_convert_booleans(self):
+        self.assertEquals(convert_value("true"), True)
+        self.assertEquals(convert_value("TrUe"), True)
+        self.assertEquals(convert_value("false"), False)
+        self.assertEquals(convert_value("FaLsE"), False)
+
+    def test_convert_integers(self):
+        # Things that are integers
+        self.assertEquals(convert_value("0"), 0)
+        self.assertEquals(convert_value("42"), 42)
+        self.assertEquals(convert_value("-41"), -41)
+        # Things that are not integers
+        self.assertEquals(convert_value("-12e6"), "-12e6")
+        self.assertEquals(convert_value("0x1234ABCD"), "0x1234ABCD")
+
+    def test_convert_quoted_strings(self):
+        TEST_VALUES = ("", "true", "42", "test-${ENV}-var")
+        for value in TEST_VALUES:
+            self.assertEquals(convert_value('"%s"' % (value,)), value)
+            self.assertEquals(convert_value("'%s'" % (value,)), value)
+
+    def test_env_var_subst(self):
+        os.environ.pop("MOZSVC_TEST_MISSING_ENVVAR", None)
+        os.environ["MOZSVC_TEST_PRESENT_ENVVAR"] = "TEST"
+        # Things with env var substitutions
+        self.assertEquals(convert_value("hello ${MOZSVC_TEST_PRESENT_ENVVAR}"),
+                          "hello TEST")
+        with self.assertRaises(EnvironmentNotFoundError):
+            convert_value("hello ${MOZSVC_TEST_MISSING_ENVVAR}")
+        self.assertEquals(convert_value("hello world"),
+                         "hello world")
+        # Things that are not env var subsitutions
+        TEST_VALUES = ("${MISSING_CLOSE_BRACE",
+                       "$MISSING_BRACES",
+                       "$MISSING_OPEN_BRACE}",)
+        for value in TEST_VALUES:
+            self.assertEquals(convert_value(value), value)
+
+    def test_newline_lists(self):
+        self.assertEquals(convert_value("one\ntwo\nthree"),
+                          ["one", "two", "three"])
 
 
 class ConfigTestCase(unittest.TestCase):
@@ -106,244 +159,95 @@ class ConfigTestCase(unittest.TestCase):
             del os.environ['__STUFF__']
         os.remove(self.file_two)
 
-    def test_reader(self):
-        config = Config(self.file_one)
+    def test_reading_config_files(self):
+        config = load_config(self.file_one)
 
         # values conversion
-        self.assertEquals(config.get('one', 'foo'), 'bar')
-        self.assertEquals(config.get('one', 'num'), -12)
-        self.assertEquals(config.get('one', 'st'), 'o=k')
-        self.assertEquals(config.get('one', 'lines'), [1, 'two', 3])
-        self.assertEquals(config.get('one', 'env'), 'some stuff')
+        self.assertEquals(config['one.foo'], 'bar')
+        self.assertEquals(config['one.num'], -12)
+        self.assertEquals(config['one.st'], 'o=k')
+        self.assertEquals(config['one.lines'], [1, 'two', 3])
+        self.assertEquals(config['one.env'], 'some stuff')
 
-        # getting a map
-        map = config.get_map()
-        self.assertEquals(map['one.foo'], 'bar')
+        # getting a subsection
+        subconfig = config.getsection('one')
+        self.assertEquals(subconfig['foo'], 'bar')
 
-        map = config.get_map('one')
-        self.assertEquals(map['foo'], 'bar')
+        # values read via extends
+        self.assertEquals(config['three.more'], 'stuff')
+        self.assertEquals(config['one.two'], 'a')
 
+    def test_missing_env_var_gives_an_error(self):
         del os.environ['__STUFF__']
-        self.assertRaises(EnvironmentNotFoundError, config.get, 'one', 'env')
-
-        # extends
-        self.assertEquals(config.get('three', 'more'), 'stuff')
-        self.assertEquals(config.get('one', 'two'), 'a')
+        self.assertRaises(EnvironmentNotFoundError, load_config, self.file_one)
 
     def test_nofile(self):
         # if a user tries to use an inexistant file in extensions,
         # pops an error
-        self.assertRaises(IOError, Config, self.file_three)
+        self.assertRaises(IOError, load_config, self.file_three)
 
-    def test_load_into_settings(self):
-        settings = {}
-        load_into_settings(self.file_four, settings)
-        self.assertEquals(settings["storage.e"], "f")
-        self.assertEquals(settings["storage.g"], "h")
-        self.assertEquals(settings["multi.once.storage.i"], "j")
-        self.assertEquals(settings["multi.thrice.storage.i"], "jjj")
+    def test_dotted_section_names(self):
+        config = load_config(self.file_four)
+        self.assertEquals(config["storage.e"], "f")
+        self.assertEquals(config["storage.g"], "h")
+        self.assertEquals(config["multi.once.storage.i"], "j")
+        self.assertEquals(config["multi.thrice.storage.i"], "jjj")
+        self.assertEquals(config.getsection("multi")["once.storage.i"], "j")
+        self.assertEquals(config.getsection("multi.once")["storage.i"], "j")
+        self.assertEquals(config.getsection("multi.once.storage")["i"], "j")
 
-    def test_get_configurator(self):
-        global_config = {"__file__": self.file_four}
-        settings = {"pyramid.testing": "test"}
-        config = get_configurator(global_config, **settings)
-        settings = config.get_settings()
-        self.assertEquals(settings["pyramid.testing"], "test")
-        self.assertEquals(settings["storage.e"], "f")
-        self.assertEquals(settings["storage.g"], "h")
-        self.assertEquals(settings["multi.once.storage.i"], "j")
-        self.assertEquals(settings.getsection("multi")["once.storage.i"], "j")
-        self.assertEquals(settings.getsection("multi.once")["storage.i"], "j")
-        self.assertEquals(settings.getsection("multi.once.storage")["i"], "j")
-
-    def test_get_configurator_nofile(self):
-        global_config = {"blah": "blech"}
-        settings = {"pyramid.testing": "test"}
-        config = get_configurator(global_config, **settings)
-        settings = config.get_settings()
-        self.assertEquals(settings["pyramid.testing"], "test")
-
-    def test_settings_dict_copy(self):
-        settings = SettingsDict({
+    def test_configdict_copy(self):
+        config = ConfigDict({
           "a.one": 1,
           "a.two": 2,
           "b.three": 3,
           "four": 4,
         })
-        new_settings = settings.copy()
-        self.assertEqual(settings, new_settings)
-        self.failUnless(isinstance(new_settings, SettingsDict))
+        new_config = config.copy()
+        self.assertEqual(config, new_config)
+        self.failUnless(isinstance(new_config, ConfigDict))
 
-    def test_settings_dict_getsection(self):
-        settings = SettingsDict({
+    def test_configdict_getsection(self):
+        config = ConfigDict({
           "a.one": 1,
           "a.two": 2,
           "b.three": 3,
           "four": 4,
         })
-        self.assertEquals(settings.getsection("a"), {"one": 1, "two": 2})
-        self.assertEquals(settings.getsection("b"), {"three": 3})
-        self.assertEquals(settings.getsection("c"), {})
-        self.assertEquals(settings.getsection(""), {"four": 4})
+        self.assertEquals(config.getsection("a"), {"one": 1, "two": 2})
+        self.assertEquals(config.getsection("b"), {"three": 3})
+        self.assertEquals(config.getsection("c"), {})
+        self.assertEquals(config.getsection(""), {"four": 4})
 
-    def test_settings_dict_setdefaults(self):
-        settings = SettingsDict({
+    def test_configdict_setdefaults(self):
+        config = ConfigDict({
           "a.one": 1,
           "a.two": 2,
           "b.three": 3,
           "four": 4,
         })
-        settings.setdefaults({"a.two": "TWO", "a.five": 5, "new": "key"})
-        self.assertEquals(settings.getsection("a"),
+        config.setdefaults({"a.two": "TWO", "a.five": 5, "new": "key"})
+        self.assertEquals(config.getsection("a"),
                          {"one": 1, "two": 2, "five": 5})
-        self.assertEquals(settings.getsection("b"), {"three": 3})
-        self.assertEquals(settings.getsection("c"), {})
-        self.assertEquals(settings.getsection(""), {"four": 4, "new": "key"})
+        self.assertEquals(config.getsection("b"), {"three": 3})
+        self.assertEquals(config.getsection("c"), {})
+        self.assertEquals(config.getsection(""), {"four": 4, "new": "key"})
 
     def test_location_interpolation(self):
-        config = Config(self.file_one)
-        # file_one is a StringIO, so it has no location.
-        self.assertEquals(config.get('one', 'location'), '%(here)s')
-        # file_two is a real file, so it has a location.
+        config = load_config(self.file_one)
         file_two_loc = os.path.dirname(self.file_two)
-        self.assertEquals(config.get('three', 'location'), file_two_loc)
-import unittest
-from StringIO import StringIO
-from textwrap import dedent
+        self.assertEquals(config['three.location'], file_two_loc)
 
-from zope.interface import Interface, implements
-from zope.interface.verify import verifyObject
-
-from pyramid.config import Configurator, ConfigurationConflictError
-
-from mozsvc.config import Config
-from mozsvc.plugin import load_and_register
-
-
-class ITest1(Interface):
-    """A test Interface."""
-    pass
-
-
-class ITest2(Interface):
-    """Another test Interface."""
-    pass
-
-
-class Test1(object):
-    """A concrete implementation of ITest1."""
-    implements(ITest1)
-
-    def __init__(self, **kwds):
-        self.kwds = kwds
-
-
-class Test2(object):
-    """A concrete implementation of ITest2."""
-    implements(ITest2)
-
-    def __init__(self, **kwds):
-        self.kwds = kwds
-
-
-class Test1And2(object):
-    """A concrete implementation of both ITest1 and ITest2."""
-    implements(ITest1, ITest2)
-
-    def __init__(self, **kwds):
-        self.kwds = kwds
-
-
-class TestPluginLoading(unittest.TestCase):
-
-    def test_loading_from_config(self):
-        config = Config(StringIO(dedent("""
+    def test_loading_plugin_from_config(self):
+        config = load_config(StringIO(dedent("""
         [test1]
-        backend = mozsvc.tests.test_plugin.Test1
+        backend = mozsvc.tests.test_config.StubClass
         arg1 = 1
         hello = world
         [test2]
         dontusethis =  seriously
         """)))
-        settings = {"config": config}
-        config = Configurator(settings=settings)
-        plugin = load_and_register("test1", config)
-        config.commit()
-        self.failUnless(verifyObject(ITest1, plugin))
-        self.failUnless(isinstance(plugin, Test1))
-        self.assertEquals(plugin.kwds["arg1"], 1)
-        self.assertEquals(plugin.kwds["hello"], "world")
-        self.assertEquals(len(plugin.kwds), 2)
-        self.failUnless(config.registry.queryUtility(ITest1) is plugin)
-
-    def test_loading_from_settings(self):
-        settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test1.arg1": 1,
-          "test1.hello": "world",
-          "test2.dontusethis": "seriously",
-        }
-        config = Configurator(settings=settings)
-        plugin = load_and_register("test1", config)
-        config.commit()
-        self.failUnless(verifyObject(ITest1, plugin))
-        self.failUnless(isinstance(plugin, Test1))
-        self.assertEquals(plugin.kwds["arg1"], 1)
-        self.assertEquals(plugin.kwds["hello"], "world")
-        self.assertEquals(len(plugin.kwds), 2)
-        self.failUnless(config.registry.queryUtility(ITest1) is plugin)
-
-    def test_loading_several_plugins(self):
-        settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test1.hello": "world",
-          "test2.backend": "mozsvc.tests.test_plugin.Test2",
-        }
-        config = Configurator(settings=settings)
-        plugin1 = load_and_register("test1", config)
-        plugin2 = load_and_register("test2", config)
-        config.commit()
-
-        self.failUnless(verifyObject(ITest1, plugin1))
-        self.failUnless(isinstance(plugin1, Test1))
-        self.assertEquals(plugin1.kwds["hello"], "world")
-        self.assertEquals(len(plugin1.kwds), 1)
-        self.failUnless(config.registry.queryUtility(ITest1) is plugin1)
-
-        self.failUnless(verifyObject(ITest2, plugin2))
-        self.failUnless(isinstance(plugin2, Test2))
-        self.assertEquals(len(plugin2.kwds), 0)
-        self.failUnless(config.registry.queryUtility(ITest2) is plugin2)
-
-    def test_loading_with_conflict_detection(self):
-        settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
-        }
-        config = Configurator(settings=settings)
-        load_and_register("test1", config)
-        load_and_register("test_both", config)
-        self.assertRaises(ConfigurationConflictError, config.commit)
-
-    def test_loading_with_conflict_resolution(self):
-        settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test2.backend": "mozsvc.tests.test_plugin.Test2",
-          "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
-        }
-
-        # Load plugin_both last, it will win for both interfaces.
-        config = Configurator(settings=settings, autocommit=True)
-        load_and_register("test1", config)
-        plugin2 = load_and_register("test2", config)
-        plugin_both = load_and_register("test_both", config)
-        self.failUnless(config.registry.queryUtility(ITest1) is plugin_both)
-        self.failUnless(config.registry.queryUtility(ITest2) is plugin_both)
-
-        # Load plugin_both before plugin2, it will be beaten only for that.
-        config = Configurator(settings=settings, autocommit=True)
-        load_and_register("test1", config)
-        plugin_both = load_and_register("test_both", config)
-        plugin2 = load_and_register("test2", config)
-        self.failUnless(config.registry.queryUtility(ITest1) is plugin_both)
-        self.failUnless(config.registry.queryUtility(ITest2) is plugin2)
+        plugin = create_from_config(config, "test1")
+        self.failUnless(isinstance(plugin, StubClass))
+        self.assertEquals(plugin.arg1, 1)
+        self.assertEquals(plugin.hello, "world")

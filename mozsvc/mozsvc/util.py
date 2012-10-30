@@ -1,9 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
-# file,
-# You can obtain one at http://mozilla.org/MPL/2.0/.
-# ***** END LICENSE BLOCK *****
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
 import sys
@@ -15,44 +12,74 @@ import urlparse
 import urllib
 
 
-def resolve_name(name):
+def resolve_name(name, package=None):
     """Resolve dotted name into a python object.
 
     This function resolves a dotted name as a reference to a python object,
-    returning whatever object happens to live at that path.  The given
-    name must be an absolute module reference.
-    """
-    ret = None
-    parts = name.split('.')
-    cursor = len(parts)
-    last_exc = None
+    returning whatever object happens to live at that path.
 
-    # Try successively short prefixes of the name
+    If the given name is a relative import reference, the optional second
+    argument "package" must be provided to name starting point of the search.
+    """
+    # The caller can either use "module.name:object.name" syntax
+    # or just use dots everywhere with no colon.
+    colon_pos = name.find(":")
+    if colon_pos != -1:
+        module_parts = name[:colon_pos].split(".")
+        object_parts = name[colon_pos + 1:].split(".")
+    else:
+        module_parts = name.split(".")
+        object_parts = []
+
+    if not module_parts and not object_parts:
+        raise ImportError("invalid dotted-name: %r" % (name,))
+
+    # If it's a relative import, prepend the supplied package name.
+    if not module_parts or not module_parts[0]:
+        if package is None:
+            raise ImportError("relative import without package: %r" % (name,))
+        if not isinstance(package, basestring):
+            package = package.__name__
+        module_parts = package.split(".") + module_parts[1:]
+        # Resolve backreferences.
+        # Each empty part cancels out the part preceeding it.
+        i = 1
+        while i < len(module_parts):
+            if module_parts[i]:
+                i += 1
+            else:
+                i -= 1
+                if i < 0:
+                    raise ImportError("too many backrefences: %r" % (name,))
+                module_parts.pop(i)
+                module_parts.pop(i)
+
+    # Try successively shorter prefixes of the module name
     # until we find something that can be imported.
-    module_name = parts[:cursor]
-    while cursor > 0:
+    obj = None
+    last_exc = None
+    while True:
         try:
-            ret = __import__('.'.join(module_name))
+            obj = __import__(".".join(module_parts))
             break
         except ImportError, exc:
-            last_exc = exc
-            if cursor == 0:
+            if not module_parts:
                 raise
-            cursor -= 1
-            module_name = parts[:cursor]
+            last_exc = exc
+            object_parts.insert(0, module_parts.pop(-1))
 
     # The import will have given us the object corresponding
     # to the first component of the name.  Resolve all remaining
     # components by looking them up as attribute references.
-    for part in parts[1:]:
+    for part in module_parts[1:] + object_parts:
         try:
-            ret = getattr(ret, part)
+            obj = getattr(obj, part)
         except AttributeError:
             if last_exc is not None:
                 raise last_exc
             raise ImportError(name)
 
-    return ret
+    return obj
 
 
 def maybe_resolve_name(name_or_object):
@@ -65,14 +92,6 @@ def maybe_resolve_name(name_or_object):
     if not isinstance(name_or_object, basestring):
         return name_or_object
     return resolve_name(name_or_object)
-
-
-def randchar(chars=string.digits + string.letters):
-    """Generates a random char using urandom.
-
-    If the system does not support it, the function fallbacks on random.choice
-    """
-    return randchars(1, chars)
 
 
 def randchars(size, chars=string.digits + string.letters):
@@ -107,7 +126,7 @@ def safer_format_exc(exc_typ=None, exc_val=None, exc_tb=None):
         exc_val = exc_val or current_exc[1]
         exc_tb = exc_tb or current_exc[2]
     lines = traceback.format_tb(exc_tb)
-    lines.append("%r : %r\n" % (exc_type, exc_val))
+    lines.append("%r : %r\n" % (exc_typ, exc_val))
     return "".join(lines)
 
 

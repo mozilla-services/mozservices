@@ -9,7 +9,7 @@ import urlparse
 if sys.version_info < (2, 7):
     import unittest2 as unittest
 else:
-    import unittest
+    import unittest  # NOQA
 
 from webtest import TestApp
 from wsgiproxy.app import WSGIProxyApp

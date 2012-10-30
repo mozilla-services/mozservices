@@ -2,61 +2,45 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import unittest
+from webtest import TestApp
 
-import pyramid.testing
+from mozsvc.middleware import CatchErrorMiddleware
 
-from mozsvc.exceptions import BackendError
-from mozsvc.tests.support import make_request
+from mozsvc.tests.support import unittest
 
 
-class TestTweens(unittest.TestCase):
+class ErrorfulWSGIApp(object):
+    """A WSGI app that just raises a given error."""
+
+    def __init__(self, exc_type, *exc_args, **exc_kwds):
+        self.exc_type = exc_type
+        self.exc_args = exc_args
+        self.exc_kwds = exc_kwds
+
+    def __call__(self, environ, start_response):
+        raise self.exc_type(*self.exc_args, **self.exc_kwds)
+
+
+class TestCatchErrorMiddleware(unittest.TestCase):
 
     def setUp(self):
-        self.app = None
-        self.config = pyramid.testing.setUp()
-        self.config.registry.settings["mozsvc.retry_after"] = "17"
-        self.config.include("mozsvc")
-        self.config.add_route("backend_error", "/backend_error")
+        self.captured_errors = []
+        config = {
+          "global.logger_hook": self.captured_errors.append
+        }
+        self.wsgi_app = ErrorfulWSGIApp(ValueError, "MOZSVC_TEST")
+        self.test_app = TestApp(CatchErrorMiddleware(self.wsgi_app, config))
 
-    def tearDown(self):
-        pyramid.testing.tearDown()
+    def test_that_exceptions_get_reported_with_crash_id(self):
+        r = self.test_app.get("/", status=500)
+        self.assertEquals(len(self.captured_errors), 1)
+        self.assertTrue("MOZSVC_TEST" in self.captured_errors[0]["error"])
+        self.assertTrue(self.captured_errors[0]["crash_id"] in r.body)
 
-    def _make_request(self, *args, **kwds):
-        return make_request(self.config, *args, **kwds)
-
-    def _do_request(self, *args, **kwds):
-        if self.app is None:
-            self.app = self.config.make_wsgi_app()
-        req = self._make_request(*args, **kwds)
-        return self.app.handle_request(req)
-
-    def _set_backend_error_view(self, func):
-        self.config.add_view(func, route_name="backend_error")
-
-    def test_that_backend_errors_are_captured(self):
-        @self._set_backend_error_view
-        def backend_error(request):
-            raise BackendError
-
-        r = self._do_request("/backend_error")
-        self.assertEquals(r.status_int, 503)
-        self.assertEquals(r.headers["Retry-After"], "17")
-
-    def test_that_backend_errors_can_set_retry_after(self):
-        @self._set_backend_error_view
-        def backend_error(request):
-            raise BackendError(retry_after=42)
-
-        r = self._do_request("/backend_error")
-        self.assertEquals(r.status_int, 503)
-        self.assertEquals(r.headers["Retry-After"], "42")
-
-    def test_that_retry_after_doesnt_get_set_to_zero(self):
-        @self._set_backend_error_view
-        def backend_error(request):
-            raise BackendError(retry_after=0)
-
-        r = self._do_request("/backend_error")
-        self.assertEquals(r.status_int, 503)
-        self.assertEquals(r.headers.get("Retry-After"), None)
+    def test_that_newlines_arent_written_into_logs(self):
+        self.wsgi_app.exc_args = ("Malicious\nErrorData",)
+        self.test_app.get("/", status=500)
+        self.assertEquals(len(self.captured_errors), 1)
+        errlog = self.captured_errors[0]["error"]
+        self.assertTrue("Malicious\nErrorData" not in errlog)
+        self.assertTrue("Malicious\\nErrorData" in errlog)

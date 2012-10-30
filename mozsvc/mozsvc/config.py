@@ -1,8 +1,6 @@
-# ***** BEGIN LICENSE BLOCK *****
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-# ***** END LICENSE BLOCK *****
 """ Configuration file reader / writer
 
 https://wiki.mozilla.org/index.php?title=Services/Sync/Server/GlobalConfFile
@@ -33,6 +31,8 @@ arguments, and create an instance of the class for you.
 import re
 import os
 from ConfigParser import SafeConfigParser
+
+from mozsvc.util import resolve_name
 
 
 # Section separator character for config dict keys.
@@ -133,7 +133,6 @@ class ConfigDict(dict):
             self.setdefault(k, v)
 
 
-
 def load_config(filename, config=None):
     """Load a ConfigDict from the specified .ini file.
 
@@ -183,11 +182,12 @@ def load_config(filename, config=None):
     # If we need to extend the config by loading additional files,
     # then handle each of them recursively.
     extends = parser.defaults().get("extends")
-    if isinstance(extends, basestring):
-        extends = (extends,)
-    for extfilename in extends:
-        config.setdefaults(load_config(extfilename))
-    
+    if extends is not None:
+        if isinstance(extends, basestring):
+            extends = (extends,)
+        for extfilename in extends:
+            config.setdefaults(load_config(extfilename))
+
     return config
 
 
@@ -210,7 +210,7 @@ def convert_value(value):
     value = value.strip()
 
     # If there is no newline then it's just a single item.
-    if "\n" not value:
+    if "\n" not in value:
         return _convert_single_value(value)
 
     # Otherwise it's a newline-separated list of items.
@@ -218,7 +218,7 @@ def convert_value(value):
     for ln in value.split("\n"):
         ln = ln.strip()
         if ln:
-            values.append(_convert_single_value(value))
+            values.append(_convert_single_value(ln))
     return values
 
 
@@ -237,7 +237,7 @@ def _convert_single_value(value):
     # If it's a well-formed number then convert it into an integer.
     if _MAYBE_A_NUMBER.match(value):
         try:
-            return int(value)
+            return int(value, 10)
         except ValueError:
             pass
 
@@ -265,11 +265,11 @@ def substitute_env_vars(value, environ=None):
 
     def get_replacement(matchobj):
         varname = matchobj.groups()[0]
-        if varname not in os.environ:
+        if varname not in environ:
             raise EnvironmentNotFoundError(varname)
-        return os.environ[varname]
-    
-    return _IS_ENV_VAR.sub(get_replacement, value)
+        return environ[varname]
+
+    return _ENV_VAR_SUBST.sub(get_replacement, value)
 
 
 def create_from_config(config, section="", cls_param="backend"):

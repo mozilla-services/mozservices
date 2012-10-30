@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 # Importing this up front prevents a pointless error traceback
 # from being printed after running `python setup.py test.`
-import multiprocessing
+import multiprocessing  # NOQA
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -14,11 +14,11 @@ with open(os.path.join(here, 'README.txt')) as f:
 with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
-requires = ['simplejson']
+requires = ['simplejson', 'WebTest', 'WSGIProxy']
 
-tests_requires = list(requires)
+tests_require = []
 if sys.version_info < (2, 7):
-    tests_requires.append('unittest2')
+    tests_require.append('unittest2')
 
 
 setup(name='mozsvc',
@@ -34,11 +34,10 @@ setup(name='mozsvc',
       author='Mozilla Services',
       author_email='services-dev@mozilla.org',
       url='https://github.com/mozilla-services/mozservices',
-      keywords='web mozilla'
+      keywords='web mozilla',
       packages=find_packages(),
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      extras_require=extras_require,
-      tests_require=tests_requires,
+      tests_require=tests_require,
       test_suite="mozsvc.tests")
