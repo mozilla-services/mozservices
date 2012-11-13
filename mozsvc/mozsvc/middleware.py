@@ -4,6 +4,7 @@
 
 import logging
 
+import wsgiref.util
 import simplejson as json
 from hashlib import md5
 
@@ -52,6 +53,10 @@ class CatchErrorMiddleware(object):
             # We want to return a 500 for all exceptions, but there's
             # no point in logging things like KeyboardInterrupt.
             if isinstance(exc, Exception):
+                req_details = "%s %s" % (environ["REQUEST_METHOD"],
+                                         wsgiref.util.request_uri(environ))
+                self.logger.error("Uncaught exception while handling request:")
+                self.logger.error(req_details)
                 self.logger.error(hash)
                 self.logger.error(err)
 
