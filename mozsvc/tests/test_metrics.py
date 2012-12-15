@@ -10,7 +10,7 @@ import json
 metlog = True
 try:
     from metlog.client import MetlogClient
-    from metlog.senders import ZmqPubSender
+    from metlog.senders import UdpSender
     from metlog.senders.logging import StdLibLoggingSender
     from metlog.decorators import incr_count
     from metlog.decorators import timeit
@@ -34,9 +34,9 @@ class TestMetrics(unittest2.TestCase):
         mozconfig = Config(StringIO(dedent("""
         [test1]
         backend = mozsvc.metrics.MetlogPlugin
-        sender_class=metlog.senders.ZmqPubSender
-        sender_bindstrs=tcp://localhost:5585
-                        tcp://localhost:5586
+        sender_class=metlog.senders.UdpSender
+        sender_host=localhost
+        sender_port=23456
 
         [test2]
         dontusethis =  seriously
@@ -47,14 +47,13 @@ class TestMetrics(unittest2.TestCase):
         config.commit()
         self.failUnless(isinstance(plugin, MetlogPlugin))
         self.failUnless(isinstance(plugin.client, MetlogClient))
-        self.failUnless(isinstance(plugin.client.sender, ZmqPubSender))
+        self.failUnless(isinstance(plugin.client.sender, UdpSender))
 
         client = plugin.client
         sender = client.sender
-        bindstrs = sender.pool.socket().connect_bind
+        destination = sender._destinations[0]
 
-        self.assertEquals(bindstrs, \
-                ['tcp://localhost:5585', 'tcp://localhost:5586'])
+        self.assertEquals(destination, ("localhost", 23456))
 
     def test_loading_from_configurator_with_default_sender(self):
         config = get_configurator({})
@@ -64,13 +63,14 @@ class TestMetrics(unittest2.TestCase):
     def test_loading_from_configurator_with_explicit_sender(self):
         config = get_configurator({}, **{
             "metlog.backend": "mozsvc.metrics.MetlogPlugin",
-            "metlog.sender_class": "metlog.senders.ZmqPubSender",
-            "metlog.sender_bindstrs": "tcp://localhost:5585",
+            "metlog.sender_class": "metlog.senders.UdpSender",
+            "metlog.sender_host": "localhost",
+            "metlog.sender_port": 23456,
         })
         client = load_metlog_client(config)
-        self.failUnless(isinstance(client.sender, ZmqPubSender))
-        bindstrs = client.sender.pool.socket().connect_bind
-        self.assertEquals(bindstrs, ['tcp://localhost:5585'])
+        self.failUnless(isinstance(client.sender, UdpSender))
+        destination = client.sender._destinations[0]
+        self.assertEquals(destination, ("localhost", 23456))
 
 
 class TestConfigurationLoading(unittest2.TestCase):
