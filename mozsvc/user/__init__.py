@@ -99,7 +99,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
             # twiddle any configuration files, but probably not what anyone
             # wants to use long-term.
             msgs = ["WARNING: using a randomly-generated token secret.",
-                    "You probably want to set 'secret' or 'secrets_file' in"
+                    "You probably want to set 'secret' or 'secrets_file' in "
                     "the [hawkauth] section of your configuration"]
             for msg in msgs:
                 mozsvc.logger.warn(msg)
