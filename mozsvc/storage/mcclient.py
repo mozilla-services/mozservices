@@ -91,22 +91,46 @@ class MemcachedClient(object):
             raise BackendError(str(err))
 
     def _encode_key(self, key):
+        """Encode an app-level key into the final form used for storage.
+
+        The default implementation simply adds any configured prefix;
+        subclasses are free to override or extend this functionality.
+        """
         key = self.key_prefix + key
         if len(key) > self.max_key_size:
             raise ValueError("value too long")
         return key
 
     def _decode_key(self, key):
+        """Decode a storage-level key into the form expected by the app.
+
+        The default implementation simply strips any configured prefix;
+        subclasses are free to override or extend this functionality.
+        """
         assert key.startswith(self.key_prefix)
         return key[len(self.key_prefix):]
 
     def _encode_value(self, value):
+        """Encode an app-level value into the form for final storage.
+
+        This method returns the encoded value and any flag bits that
+        should be set when storing into memcache to identify the encoding.
+        The default implementation json-encodes all values; subclasses
+        are free to override or extend this functionality.
+        """
         value = json.dumps(value)
         if len(value) > self.max_value_size:
             raise ValueError("value too long")
         return value, 0
 
-    def _decode_value(self, value, flag):
+    def _decode_value(self, value, flags):
+        """Decode a storage-level value into the form expected by the app.
+
+        This method takes the encoded value and any flag bits that were
+        set in memcache, and returns the decoded app-level value.
+        The default implementation json-decodes all values; subclasses
+        are free to override or extend this functionality.
+        """
         value = json.loads(value)
         return value
 
