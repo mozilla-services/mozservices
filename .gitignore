@@ -1,6 +1,7 @@
 .hg*
 *.pyc
 *.mako.py
+*.egg
 lib
 include
 bin
