@@ -15,9 +15,9 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
 
 requires = ['pyramid', 'simplejson', 'cef']
 
-tests_requires = requires + [
+tests_require = requires + [
             'pyramid_macauth', 'tokenlib', 'macauthlib>=0.3.0',
-            'cornice>=0.10', 'wsgiproxy', 'unittest2']
+            'cornice>=0.10', 'wsgiproxy', 'unittest2', 'webtest']
 
 extras_require = {
     'metlog': ['metlog-py>=0.9.1'],
@@ -44,6 +44,6 @@ setup(name='mozsvc',
       zip_safe=False,
       install_requires=requires,
       extras_require=extras_require,
-      tests_require=tests_requires,
+      tests_require=tests_require,
       test_suite="mozsvc.tests",
       paster_plugins=['pyramid'])

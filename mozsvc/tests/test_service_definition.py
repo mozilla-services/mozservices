@@ -10,7 +10,7 @@ from pyramid import testing
 from pyramid.config import Configurator
 from webtest import TestApp
 
-from cornice.tests import CatchErrors
+from cornice.tests.support import CatchErrors
 from mozsvc.config import Config
 metlog = True
 try:
