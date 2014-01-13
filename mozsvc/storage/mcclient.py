@@ -22,6 +22,10 @@ import mozsvc
 from mozsvc.exceptions import BackendError
 
 
+DEFAULT_MAX_KEY_SIZE = 250
+DEFAULT_MAX_VALUE_SIZE = 20 * 1024 * 1024
+
+
 class MemcachedClient(object):
     """Helper class for interacting with memcache.
 
@@ -36,7 +40,8 @@ class MemcachedClient(object):
     """
 
     def __init__(self, servers=None, key_prefix="", pool_size=None,
-                 pool_timeout=60, logger=None, **kwds):
+                 pool_timeout=60, logger=None, max_key_size=None,
+                 max_value_size=None, **kwds):
         if servers is None:
             servers = ["127.0.0.1:11211"]
         elif isinstance(servers, basestring):
@@ -50,6 +55,8 @@ class MemcachedClient(object):
             msg += "Consider using moxi for transparent clustering support."
             raise ValueError(msg)
         self.pool = MCClientPool(servers[0], pool_size, pool_timeout)
+        self.max_key_size = max_key_size or DEFAULT_MAX_KEY_SIZE
+        self.max_value_size = max_value_size or DEFAULT_MAX_VALUE_SIZE
 
     @property
     def logger(self):
@@ -83,84 +90,133 @@ class MemcachedClient(object):
             self.logger.error(err)
             raise BackendError(str(err))
 
+    def _encode_key(self, key):
+        """Encode an app-level key into the final form used for storage.
+
+        The default implementation simply adds any configured prefix;
+        subclasses are free to override or extend this functionality.
+        """
+        key = self.key_prefix + key
+        if len(key) > self.max_key_size:
+            raise ValueError("value too long")
+        return key
+
+    def _decode_key(self, key):
+        """Decode a storage-level key into the form expected by the app.
+
+        The default implementation simply strips any configured prefix;
+        subclasses are free to override or extend this functionality.
+        """
+        assert key.startswith(self.key_prefix)
+        return key[len(self.key_prefix):]
+
+    def _encode_value(self, value):
+        """Encode an app-level value into the form for final storage.
+
+        This method returns the encoded value and any flag bits that
+        should be set when storing into memcache to identify the encoding.
+        The default implementation json-encodes all values; subclasses
+        are free to override or extend this functionality.
+        """
+        value = json.dumps(value)
+        if len(value) > self.max_value_size:
+            raise ValueError("value too long")
+        return value, 0
+
+    def _decode_value(self, value, flags):
+        """Decode a storage-level value into the form expected by the app.
+
+        This method takes the encoded value and any flag bits that were
+        set in memcache, and returns the decoded app-level value.
+        The default implementation json-decodes all values; subclasses
+        are free to override or extend this functionality.
+        """
+        value = json.loads(value)
+        return value
+
     def get(self, key):
         """Get the value stored under the given key."""
+        key = self._encode_key(key)
         with self._connect() as mc:
-            res = mc.get(self.key_prefix + key)
+            res = mc.get(key)
         if res is None:
             return None
         data, flags = res
-        data = json.loads(data)
-        return data
+        return self._decode_value(data, flags)
 
     def gets(self, key):
         """Get the current value and casid for the given key."""
+        key = self._encode_key(key)
         with self._connect() as mc:
-            res = mc.gets(self.key_prefix + key)
+            res = mc.gets(key)
         if res is None:
             return None, None
         data, flags, casid = res
-        data = json.loads(data)
+        data = self._decode_value(data, flags)
         return data, casid
 
     def get_multi(self, keys):
         """Get the values stored under the given keys in a single request."""
         with self._connect() as mc:
-            prefixed_keys = [self.key_prefix + key for key in keys]
-            prefixed_items = mc.get_multi(prefixed_keys)
+            encoded_keys = [self._encode_key(key) for key in keys]
+            encoded_items = mc.get_multi(encoded_keys)
         items = {}
-        for key, res in prefixed_items.iteritems():
-            assert key.startswith(self.key_prefix)
+        for key, res in encoded_items.iteritems():
             assert res is not None
             data, flags = res
-            items[key[len(self.key_prefix):]] = json.loads(data)
+            items[self._decode_key(key)] = self._decode_value(data, flags)
         return items
 
     def set(self, key, value, time=0):
         """Set the value stored under the given key."""
-        data = json.dumps(value)
+        key = self._encode_key(key)
+        data, flags = self._encode_value(value)
         with self._connect() as mc:
-            res = mc.set(self.key_prefix + key, data, time)
+            res = mc.set(key, data, time, flags)
         if res != "STORED":
             return False
         return True
 
     def add(self, key, value, time=0):
         """Add the given key to memcached if not already present."""
-        data = json.dumps(value)
+        key = self._encode_key(key)
+        data, flags = self._encode_value(value)
         with self._connect() as mc:
-            res = mc.add(self.key_prefix + key, data, time)
+            res = mc.add(key, data, time, flags)
         if res != "STORED":
             return False
         return True
 
     def replace(self, key, value, time=0):
         """Replace the given key in memcached if it is already present."""
-        data = json.dumps(value)
+        key = self._encode_key(key)
+        data, flags = self._encode_value(value)
         with self._connect() as mc:
-            res = mc.replace(self.key_prefix + key, data, time)
+            res = mc.replace(key, data, time, flags)
         if res != "STORED":
             return False
         return True
 
     def cas(self, key, value, casid, time=0):
         """Set the value stored under the given key if casid matches."""
-        data = json.dumps(value)
+        key = self._encode_key(key)
+        data, flags = self._encode_value(value)
         with self._connect() as mc:
             # Memcached's CAS only works properly on existing keys.
             # Fortunately ADD has the same semantics for missing keys.
             if casid is None:
-                res = mc.add(self.key_prefix + key, data, time)
+                res = mc.add(key, data, time, flags)
             else:
-                res = mc.cas(self.key_prefix + key, data, casid, time)
+                res = mc.cas(key, data, casid, time, flags)
         if res != "STORED":
             return False
         return True
 
     def delete(self, key):
         """Delete the value stored under the given key."""
+        key = self._encode_key(key)
         with self._connect() as mc:
-            res = mc.delete(self.key_prefix + key)
+            res = mc.delete(key)
         if res != "DELETED":
             return False
         return True
