@@ -5,8 +5,8 @@ cef
 unittest2
 WebTest
 WSGIProxy
-pyramid_macauth
+pyramid_hawkauth
 tokenlib
-macauthlib
+hawkauthlib
 metlog-py[zeromqpub]
 umemcache

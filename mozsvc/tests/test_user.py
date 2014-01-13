@@ -18,7 +18,7 @@ from pyramid.security import authenticated_userid
 from pyramid.httpexceptions import HTTPUnauthorized
 
 import tokenlib
-import macauthlib
+import hawkauthlib
 
 from mozsvc.exceptions import BackendError
 from mozsvc.tests.support import TestCase
@@ -132,17 +132,17 @@ class UserTestCase(TestCase):
                   })
         self.assertFalse(request.user)
 
-    def test_that_macauth_is_used_by_default(self):
+    def test_that_hawkauth_is_used_by_default(self):
         # Generate signed request.
         req = self.make_request()
-        tokenid, key = self.policy.encode_mac_id(req, 42)
-        macauthlib.sign_request(req, tokenid, key)
+        tokenid, key = self.policy.encode_hawk_id(req, 42)
+        hawkauthlib.sign_request(req, tokenid, key)
         # That should be enough to authenticate.
         self.assertEquals(authenticated_userid(req), 42)
         self.assertEquals(req.user.get("uid"), 42)
-        # Check that it rejects invalid MAC ids.
+        # Check that it rejects invalid Hawk ids.
         req = self.make_request()
-        macauthlib.sign_request(req, tokenid, key)
+        hawkauthlib.sign_request(req, tokenid, key)
         authz = req.environ["HTTP_AUTHORIZATION"]
         req.environ["HTTP_AUTHORIZATION"] = authz.replace(tokenid, "XXXXXX")
         self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
@@ -151,21 +151,21 @@ class UserTestCase(TestCase):
 
     def test_that_req_user_can_be_replaced(self):
         req = self.make_request()
-        tokenid, key = self.policy.encode_mac_id(req, 42)
-        macauthlib.sign_request(req, tokenid, key)
+        tokenid, key = self.policy.encode_hawk_id(req, 42)
+        hawkauthlib.sign_request(req, tokenid, key)
         req.user = {"uid": 7}
         self.assertEquals(req.user, {"uid": 7})
 
-    def test_that_macauth_cant_use_both_secret_and_secrets_file(self):
+    def test_that_hawkauth_cant_use_both_secret_and_secrets_file(self):
         config2 = pyramid.testing.setUp()
         config2.add_settings(DEFAULT_SETTINGS)
         config2.add_settings({
-            "macauth.secret": "DARTH VADER IS LUKE'S FATHER",
-            "macauth.secrets_file": "/dev/null",
+            "hawkauth.secret": "DARTH VADER IS LUKE'S FATHER",
+            "hawkauth.secrets_file": "/dev/null",
         })
         self.assertRaises(ValueError, config2.include, "mozsvc.user")
 
-    def test_that_macauth_can_use_per_node_hostname_secrets(self):
+    def test_that_hawkauth_can_use_per_node_hostname_secrets(self):
         with tempfile.NamedTemporaryFile() as sf:
             # Write some secrets to a file.
             sf.write("http://host1.com,0001:secret11,0002:secret12\n")
@@ -176,7 +176,7 @@ class UserTestCase(TestCase):
             config2 = pyramid.testing.setUp()
             config2.add_settings(DEFAULT_SETTINGS)
             config2.add_settings({
-                "macauth.secrets_file": sf.name,
+                "hawkauth.secrets_file": sf.name,
             })
             config2.include("mozsvc.user")
             config2.commit()
@@ -186,7 +186,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should accept a request signed with the new secret on host1.
             req = self.make_request(config=config2, environ={
@@ -194,7 +194,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should reject a request signed with secret from other host.
             req = self.make_request(config=config2, environ={
@@ -202,7 +202,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
             # It should reject a request over plain http when host2 is ssl.
             req = self.make_request(config=config2, environ={
@@ -210,7 +210,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
             # It should accept a request signed with the new secret on host2.
             req = self.make_request(config=config2, environ={
@@ -219,7 +219,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should accept a request to host1 with an explicit port number.
             # Use some trickery to give host_url a value with default port.
@@ -230,7 +230,7 @@ class UserTestCase(TestCase):
             req.host_url = "http://host1.com:80"
             id = tokenlib.make_token({"uid": 42}, secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should accept a request to host2 with an explicit port number.
             # Use some trickery to give host_url a value with default port.
@@ -241,7 +241,7 @@ class UserTestCase(TestCase):
             req.host_url = "https://host2.com:443"
             id = tokenlib.make_token({"uid": 42}, secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should accept a request to host3 on a custom port.
             req = self.make_request(config=config2, environ={
@@ -250,7 +250,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret32")
             key = tokenlib.get_token_secret(id, secret="secret32")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
             # It should reject unknown hostnames.
             req = self.make_request(config=config2, environ={
@@ -258,7 +258,7 @@ class UserTestCase(TestCase):
             })
             id = tokenlib.make_token({"uid": 42}, secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
-            macauthlib.sign_request(req, id, key)
+            hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
 
 

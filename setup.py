@@ -16,7 +16,7 @@ with open(os.path.join(here, 'CHANGES.txt')) as f:
 requires = ['pyramid', 'simplejson', 'cef']
 
 tests_require = requires + [
-            'pyramid_macauth', 'tokenlib', 'macauthlib>=0.3.0',
+            'pyramid_hawkauth', 'tokenlib', 'hawkauthlib>=0.1.1',
             'cornice>=0.10', 'wsgiproxy', 'unittest2', 'webtest']
 
 extras_require = {
