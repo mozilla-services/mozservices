@@ -286,33 +286,20 @@ class TestMemcachedNonceCache(unittest2.TestCase):
         mcclient.add = add_and_remember
 
     def test_operation(self, now=lambda: int(time.time())):
-        ttl = 1
-        nc = self.nc = MemcachedNonceCache(nonce_ttl=ttl, id_ttl=10)
+        window = 5
+        nc = self.nc = MemcachedNonceCache(window=window)
         self._monkeypatch_mcclient(nc.mcclient)
         # Initially nothing is cached, so all nonces as fresh.
+        ts = now()
         try:
-            self.assertTrue(nc.check_nonce("id", now(), "abc"))
+            self.assertTrue(nc.check_nonce(ts, "abc"))
         except BackendError:
             raise unittest2.SkipTest("no memcache")
-        # After adding a nonce, that nonce should no longer be fresh.
-        self.assertFalse(nc.check_nonce("id", now(), "abc"))
-        self.assertTrue(nc.check_nonce("id", now(), "xyz"))
-        # After the ttl passes, the nonce should be expired.
-        # Unfortunately memcached only supports integer ttls, so the
-        # smallest amount of time we can sleep here is 1 second.
-        time.sleep(ttl)
-        self.assertTrue(nc.check_nonce("id", now(), "abc"))
-        # If the timestamp is too old, even a fresh nonce will fail the check.
-        self.assertFalse(nc.check_nonce("id", now() - 2 * ttl, "def"))
-        self.assertFalse(nc.check_nonce("id", now() + 2 * ttl, "def"))
-        self.assertTrue(nc.check_nonce("id", now(), "def"))
-
-    def test_operation_with_backward_clock_skew(self):
-        def now():
-            return int(time.time()) - 13
-        self.test_operation(now=now)
-
-    def test_operation_with_forward_clock_skew(self):
-        def now():
-            return int(time.time()) + 7
-        self.test_operation(now=now)
+        # After that check, the (ts, nonce) pair should be stale.
+        # Changing either the ts or the nonce will make it fresh.
+        self.assertFalse(nc.check_nonce(ts, "abc"))
+        self.assertTrue(nc.check_nonce(ts, "xyz"))
+        self.assertTrue(nc.check_nonce(ts + 1, "abc"))
+        # Timestamps outside the configured window are rejected.
+        self.assertFalse(nc.check_nonce(now() - window - 1, "abc"))
+        self.assertFalse(nc.check_nonce(now() + window + 1, "abc"))

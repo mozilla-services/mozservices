@@ -67,7 +67,7 @@ class MemcachedNonceCache(object):
         # of "create if not exists"
         key = urlsafe_b64encode(sha1("%d:%s" % (timestamp, nonce)).digest())
         try:
-            if not self.mcclient.add(key, 1, time=window):
+            if not self.mcclient.add(key, 1, time=self.window):
                 return False
         except ValueError:
             return False
