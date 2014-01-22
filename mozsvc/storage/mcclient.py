@@ -11,10 +11,13 @@ for serialization, error reporting and connection pooling.
 
 import sys
 import time
-import json
 import traceback
 import contextlib
 import Queue
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 import umemcache
 

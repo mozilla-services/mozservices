@@ -6,7 +6,7 @@
 # ***** END LICENSE BLOCK *****
 """
 
-Utilities for authentication via the Sagrada auth system.
+Utilities for authentication via Mozilla's TokenServer auth system.
 
 """
 
@@ -18,7 +18,7 @@ from pyramid.authorization import ACLAuthorizationPolicy
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.httpexceptions import HTTPUnauthorized
 
-from pyramid_macauth import MACAuthenticationPolicy
+from pyramid_hawkauth import HawkAuthenticationPolicy
 
 import tokenlib
 
@@ -73,13 +73,13 @@ class RequestWithUser(Request):
     user = property(_get_user, _set_user)
 
 
-class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
-    """Pyramid authentication policy for use with Sagrada auth tokens.
+class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
+    """Pyramid authentication policy for use with Tokenserver auth tokens.
 
     This class provides an IAuthenticationPolicy implementation based on
-    Sagrada authentication tokens as described here:
+    the Mozilla TokenServer authentication tokens as described here:
 
-        https://wiki.mozilla.org/Services/Sagrada/TokenServer
+        https://docs.services.mozilla.com/token/
 
     For verification of token signatures, this plugin can use either a
     single fixed secret (via the argument 'secret') or a file mapping
@@ -99,8 +99,8 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
             # twiddle any configuration files, but probably not what anyone
             # wants to use long-term.
             msgs = ["WARNING: using a randomly-generated token secret.",
-                    "You probably want to set 'secret' or 'secrets_file' in"
-                    "the [macauth] section of your configuration"]
+                    "You probably want to set 'secret' or 'secrets_file' in "
+                    "the [hawkauth] section of your configuration"]
             for msg in msgs:
                 mozsvc.logger.warn(msg)
         if secrets_file is not None:
@@ -109,12 +109,12 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
         else:
             self.secret = secret
             self.secrets = None
-        super(SagradaAuthenticationPolicy, self).__init__(**kwds)
+        super(TokenServerAuthenticationPolicy, self).__init__(**kwds)
 
     @classmethod
     def _parse_settings(cls, settings):
         """Parse settings for an instance of this class."""
-        supercls = super(SagradaAuthenticationPolicy, cls)
+        supercls = super(TokenServerAuthenticationPolicy, cls)
         kwds = supercls._parse_settings(settings)
         for setting in ("secret", "secrets_file"):
             if setting in settings:
@@ -122,29 +122,29 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
         return kwds
 
     def _check_signature(self, request, key):
-        """Check the MACAuth signature on the request.
+        """Check the Hawk auth signature on the request.
 
-        This method checks the MAC signature on the request against the
+        This method checks the Hawk signature on the request against the
         supplied signing key.  If missing or invalid then HTTPUnauthorized
         is raised.
 
-        The SagradaAuthenticationPolicy implementation wraps the default
-        MACAuthenticationPolicy implementation with some cef logging.
+        The TokenServerAuthenticationPolicy implementation wraps the default
+        HawkAuthenticationPolicy implementation with some cef logging.
         """
-        supercls = super(SagradaAuthenticationPolicy, self)
+        supercls = super(TokenServerAuthenticationPolicy, self)
         try:
             return supercls._check_signature(request, key)
         except HTTPUnauthorized:
-            log_cef("Authentication Failed: invalid MAC signature", 5,
+            log_cef("Authentication Failed: invalid hawk signature", 5,
                     request.environ, request.registry.settings,
                     "", signature=AUTH_FAILURE)
             raise
 
-    def decode_mac_id(self, request, tokenid):
-        """Decode a MACAuth token id into its userid and MAC secret key.
+    def decode_hawk_id(self, request, tokenid):
+        """Decode a Hawk token id into its userid and secret key.
 
         This method determines the appropriate secrets to use for the given
-        request, then passes them on to tokenlib to handle the given MAC id
+        request, then passes them on to tokenlib to handle the given Hawk
         token.
 
         If the id is invalid then ValueError will be raised.
@@ -157,21 +157,21 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
             try:
                 data = tokenlib.parse_token(tokenid, secret=secret)
                 userid = data["uid"]
-                key = tokenlib.get_token_secret(tokenid, secret=secret)
+                key = tokenlib.get_derived_secret(tokenid, secret=secret)
                 break
             except (ValueError, KeyError):
                 pass
         else:
-            log_cef("Authentication Failed: invalid MAC id", 5,
+            log_cef("Authentication Failed: invalid hawk id", 5,
                     request.environ, request.registry.settings,
                     "", signature=AUTH_FAILURE)
-            raise ValueError("invalid MAC id")
+            raise ValueError("invalid Hawk id")
         return userid, key
 
-    def encode_mac_id(self, request, userid):
-        """Encode the given userid into a MAC id and secret key.
+    def encode_hawk_id(self, request, userid):
+        """Encode the given userid into a Hawk id and secret key.
 
-        This method is essentially the reverse of decode_mac_id.  It is
+        This method is essentially the reverse of decode_hawk_id.  It is
         not needed for consuming authentication tokens, but is very useful
         when building them for testing purposes.
         """
@@ -180,7 +180,7 @@ class SagradaAuthenticationPolicy(MACAuthenticationPolicy):
         # the last one aka the "most recent" secret.
         secret = self._get_token_secrets(request)[-1]
         tokenid = tokenlib.make_token({"uid": userid}, secret=secret)
-        key = tokenlib.get_token_secret(tokenid, secret=secret)
+        key = tokenlib.get_derived_secret(tokenid, secret=secret)
         return tokenid, key
 
     def _get_token_secrets(self, request):
@@ -204,7 +204,7 @@ def includeme(config):
     Things configured include:
 
         * use RequestWithUser as the request object factory
-        * use SagradaAuthenticationPolicy as the default authn policy
+        * use TokenServerAuthenticationPolicy as the default authn policy
 
     """
     # Use RequestWithUser as the request object factory.
@@ -217,9 +217,9 @@ def includeme(config):
     authz_policy = ACLAuthorizationPolicy()
     config.set_authorization_policy(authz_policy)
 
-    # Build a SagradaAuthenticationPolicy from the deployment settings.
+    # Build a TokenServerAuthenticationPolicy from the deployment settings.
     settings = config.get_settings()
-    authn_policy = SagradaAuthenticationPolicy.from_settings(settings)
+    authn_policy = TokenServerAuthenticationPolicy.from_settings(settings)
     config.set_authentication_policy(authn_policy)
 
     # Set the forbidden view to use the challenge() method from the policy.
