@@ -261,6 +261,24 @@ class UserTestCase(TestCase):
             hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
 
+    def test_checking_of_token_node_assignment(self):
+        # Generate a token for one node
+        req = self.make_request(environ={
+            "HTTP_HOST": "host1.com",
+        })
+        tokenid, key = self.policy.encode_hawk_id(req, 42)
+        # It can authenticate for requests to that node.
+        hawkauthlib.sign_request(req, tokenid, key)
+        self.assertEquals(authenticated_userid(req), 42)
+        self.assertEquals(req.user.get("uid"), 42)
+        # But not requests to some other node.
+        # Check that it rejects invalid Hawk ids.
+        req = self.make_request(environ={
+            "HTTP_HOST": "host2.com",
+        })
+        hawkauthlib.sign_request(req, tokenid, key)
+        self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+
 
 class TestMemcachedNonceCache(unittest2.TestCase):
 

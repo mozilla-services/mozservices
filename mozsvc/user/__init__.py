@@ -152,11 +152,15 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         # There might be multiple secrets in use, if we're in the
         # process of transitioning from one to another.  Try each
         # until we find one that works.
-        secrets = self._get_token_secrets(request)
+        node_name = self._get_node_name(request)
+        secrets = self._get_token_secrets(node_name)
         for secret in secrets:
             try:
                 data = tokenlib.parse_token(tokenid, secret=secret)
                 userid = data["uid"]
+                token_node_name = data.get("node")
+                if token_node_name not in (None, node_name):
+                    raise ValueError("incorrect node for this token")
                 key = tokenlib.get_derived_secret(tokenid, secret=secret)
                 break
             except (ValueError, KeyError):
@@ -175,18 +179,18 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         not needed for consuming authentication tokens, but is very useful
         when building them for testing purposes.
         """
+        node_name = self._get_node_name(request)
         # There might be multiple secrets in use, if we're in the
         # process of transitioning from one to another.  Always use
         # the last one aka the "most recent" secret.
-        secret = self._get_token_secrets(request)[-1]
-        tokenid = tokenlib.make_token({"uid": userid}, secret=secret)
+        secret = self._get_token_secrets(node_name)[-1]
+        data = {"uid": userid, "node": node_name}
+        tokenid = tokenlib.make_token(data, secret=secret)
         key = tokenlib.get_derived_secret(tokenid, secret=secret)
         return tokenid, key
 
-    def _get_token_secrets(self, request):
-        """Get the list of possible secrets for signing tokens."""
-        if self.secrets is None:
-            return [self.secret]
+    def _get_node_name(self, request):
+        """Get the canonical node name for the given request."""
         # Secrets are looked up by hostname.
         # We need to normalize some port information for this work right.
         node_name = request.host_url
@@ -194,6 +198,12 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
             node_name = node_name[:-3]
         elif node_name.startswith("https:") and node_name.endswith(":443"):
             node_name = node_name[:-4]
+        return node_name
+
+    def _get_token_secrets(self, node_name):
+        """Get the list of possible secrets for signing tokens."""
+        if self.secrets is None:
+            return [self.secret]
         return self.secrets.get(node_name)
 
 
