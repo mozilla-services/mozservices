@@ -184,7 +184,8 @@ class UserTestCase(TestCase):
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host1.com",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret11")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -192,7 +193,8 @@ class UserTestCase(TestCase):
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host1.com",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -200,7 +202,8 @@ class UserTestCase(TestCase):
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
@@ -208,7 +211,8 @@ class UserTestCase(TestCase):
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
@@ -217,7 +221,8 @@ class UserTestCase(TestCase):
                 "HTTP_HOST": "host2.com",
                 "wsgi.url_scheme": "https",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -228,7 +233,8 @@ class UserTestCase(TestCase):
                 "wsgi.url_scheme": "http",
             }))
             req.host_url = "http://host1.com:80"
-            id = tokenlib.make_token({"uid": 42}, secret="secret11")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url[:-3]},
+                                      secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -239,7 +245,8 @@ class UserTestCase(TestCase):
                 "wsgi.url_scheme": "https",
             }))
             req.host_url = "https://host2.com:443"
-            id = tokenlib.make_token({"uid": 42}, secret="secret22")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url[:-4]},
+                                     secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -248,7 +255,8 @@ class UserTestCase(TestCase):
                 "HTTP_HOST": "host3.com:444",
                 "wsgi.url_scheme": "https",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret32")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret32")
             key = tokenlib.get_token_secret(id, secret="secret32")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -256,7 +264,8 @@ class UserTestCase(TestCase):
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host4.com",
             })
-            id = tokenlib.make_token({"uid": 42}, secret="secret12")
+            id = tokenlib.make_token({"uid": 42, "node": req.host_url},
+                                     secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
             self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
@@ -272,7 +281,6 @@ class UserTestCase(TestCase):
         self.assertEquals(authenticated_userid(req), 42)
         self.assertEquals(req.user.get("uid"), 42)
         # But not requests to some other node.
-        # Check that it rejects invalid Hawk ids.
         req = self.make_request(environ={
             "HTTP_HOST": "host2.com",
         })

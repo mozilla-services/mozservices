@@ -158,8 +158,8 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
             try:
                 data = tokenlib.parse_token(tokenid, secret=secret)
                 userid = data["uid"]
-                token_node_name = data.get("node")
-                if token_node_name not in (None, node_name):
+                token_node_name = data["node"]
+                if token_node_name != node_name:
                     raise ValueError("incorrect node for this token")
                 key = tokenlib.get_derived_secret(tokenid, secret=secret)
                 break
