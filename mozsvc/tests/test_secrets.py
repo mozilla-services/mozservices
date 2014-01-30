@@ -7,7 +7,7 @@ import os
 import time
 import itertools
 
-from mozsvc.secrets import Secrets
+from mozsvc.secrets import Secrets, FixedSecrets, DerivedSecrets
 
 
 class TestSecrets(unittest2.TestCase):
@@ -71,3 +71,24 @@ class TestSecrets(unittest2.TestCase):
         keys = secrets.keys()
         keys.sort()
         self.assertEqual(keys, ['phx123', 'phx23456'])
+
+    def test_fixed_secrets(self):
+        secrets = FixedSecrets(['one', 'two'])
+        self.assertEquals(secrets.get('phx123'), ['one', 'two'])
+        self.assertEquals(secrets.get('phx234'), ['one', 'two'])
+
+    def test_derived_secrets(self):
+        master_secrets = ['abcdef', '1234567890']
+        secrets = DerivedSecrets(master_secrets)
+        derived1 = secrets.get('phx123')
+        derived2 = secrets.get('phx987')
+        # Secrets for the same node should derived consistently.
+        self.assertEquals(derived1, secrets.get('phx123'))
+        self.assertEquals(derived2, secrets.get('phx987'))
+        # Secrets for different nodes should be different.
+        self.assertEquals(set(derived1).intersection(derived2), set())
+        # Length of derived secret mathches length of master secret.
+        for derived in (derived1, derived2):
+            self.assertEquals(len(derived), len(master_secrets))
+            for d, m in zip(derived, master_secrets):
+                self.assertEquals(len(d), len(m))

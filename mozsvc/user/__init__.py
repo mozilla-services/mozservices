@@ -26,6 +26,7 @@ from cef import log_cef, AUTH_FAILURE
 
 import mozsvc
 import mozsvc.secrets
+from mozsvc.util import resolve_name
 
 import logging
 logger = logging.getLogger("mozsvc.user")
@@ -89,26 +90,23 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
 
     implements(IAuthenticationPolicy)
 
-    def __init__(self, secret=None, secrets_file=None, **kwds):
-        if secret is not None and secrets_file is not None:
-            msg = "Can only specify one of 'secret' or 'secrets_file'"
-            raise ValueError(msg)
-        elif secret is None and secrets_file is None:
+    def __init__(self, secrets=None, **kwds):
+        if not secrets:
             # Using secret=None will cause tokenlib to use a randomly-generated
             # secret.  This is useful for getting started without having to
             # twiddle any configuration files, but probably not what anyone
             # wants to use long-term.
+            secrets = None
             msgs = ["WARNING: using a randomly-generated token secret.",
                     "You probably want to set 'secret' or 'secrets_file' in "
                     "the [hawkauth] section of your configuration"]
             for msg in msgs:
                 mozsvc.logger.warn(msg)
-        if secrets_file is not None:
-            self.secret = None
-            self.secrets = mozsvc.secrets.Secrets(secrets_file)
-        else:
-            self.secret = secret
-            self.secrets = None
+        elif isinstance(secrets, (basestring, list)):
+            secrets = mozsvc.secrets.FixedSecrets(secrets)
+        elif isinstance(secrets, dict):
+            secrets = resolve_name(secrets.pop("backend"))(**secrets)
+        self.secrets = secrets
         super(TokenServerAuthenticationPolicy, self).__init__(**kwds)
 
     @classmethod
@@ -116,9 +114,22 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         """Parse settings for an instance of this class."""
         supercls = super(TokenServerAuthenticationPolicy, cls)
         kwds = supercls._parse_settings(settings)
-        for setting in ("secret", "secrets_file"):
-            if setting in settings:
-                kwds[setting] = settings.pop(setting)
+        # collection leftover settings into a config for a Secrets object,
+        # wtih some b/w compat for old-style secret-handling settings.
+        secrets_prefix = "secrets."
+        secrets = {}
+        if "secrets_file" in settings:
+            if "secret" in settings:
+                raise ValueError("can't use both 'secret' and 'secrets_file'")
+            secrets["backend"] = "mozsvc.secrets.Secrets"
+            secrets["filename"] = settings.pop("secrets_file")
+        elif "secret" in settings:
+            secrets["backend"] = "mozsvc.secrets.FixedSecrets"
+            secrets["secrets"] = settings.pop("secret")
+        for name in settings.keys():
+            if name.startswith(secrets_prefix):
+                secrets[name[len(secrets_prefix):]] = settings.pop(name)
+        kwds['secrets'] = secrets
         return kwds
 
     def _check_signature(self, request, key):
@@ -203,7 +214,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
     def _get_token_secrets(self, node_name):
         """Get the list of possible secrets for signing tokens."""
         if self.secrets is None:
-            return [self.secret]
+            return [None]
         return self.secrets.get(node_name)
 
 

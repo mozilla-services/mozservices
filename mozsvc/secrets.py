@@ -1,25 +1,46 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+"""
+
+Classes for the management of auth-token signing secrets.
+
+The classes in this module can be used to obtain a hex-encoded secret key
+corresponding to a given webhead node name.  This key can be used for
+making or verifying auth-token signatures via e.g. HMAC.
+
+There are three options for managing this mapping of nodes to secrets:
+
+  * maintain a text file with secrets for each node (Secrets class)
+  * use a fixed set of secrets for all nodes (FixedSecrets class)
+  * derive node-specific secrets from a master secret (DerivedSecrets class)
+
+The most appropriate choice will depend on operational and security
+requirements.
+
+"""
+
 import csv
 import binascii
 import os
 import time
+import hashlib
 from collections import defaultdict
 
-# XXX we don't watch the file for v1
-# so a restart is needed to reload new secrets
+from tokenlib.utils import HKDF
 
 
 class Secrets(object):
-    """Loads into memory secret files.
+    """Load node-specific secrets from a file.
 
-    Provides a method to get a list of secrets for a
-    node, ordered by timestamps.
+    This class provides a method to get a list of secrets for a node
+    ordered by timestamps. The secrets are stored in a CSV file which
+    is loaded when the object is created.
 
     Options:
 
     - **filename**: a list of file paths, or a single path.
+
     """
     def __init__(self, filename=None):
         self._secrets = defaultdict(list)
@@ -75,3 +96,67 @@ class Secrets(object):
         except IndexError:
             pass
         self._secrets[node].append((timestamp, secret))
+
+
+class FixedSecrets(object):
+    """Use a fixed set of secrets for all nodes.
+
+    This class provides the same API as the Secrets class, but uses a
+    single list of secrets for all nodes rather than using different
+    secrets for each node.
+
+    Options:
+
+    - **secrets**: a list of hex-encoded secrets to use for all nodes.
+
+    """
+    def __init__(self, secrets):
+        if isinstance(secrets, basestring):
+            secrets = secrets.split()
+        self._secrets = secrets
+
+    def get(self, node):
+        return list(self._secrets)
+
+    def keys(self):
+        return []
+
+
+class DerivedSecrets(object):
+    """Use a HKDF-derived secret for each nodes.
+
+    This class provides the same API as the Secrets class, but rather than
+    keeping a big mapping of node-names to secrets, it uses a single list of
+    master secrets and HKDF-derives a unique secret for each node.
+
+    Options:
+
+    - **secrets**: a list of hex-encoded master secrets to use.
+
+    """
+
+    # Namespace prefix for HKDF "info" parameter.
+    HKDF_INFO_NODE_SECRET = b"services.mozilla.com/mozsvc/v1/node_secret/"
+
+    def __init__(self, master_secrets):
+        if isinstance(master_secrets, basestring):
+            master_secrets = master_secrets.split()
+        self._master_secrets = master_secrets
+
+    def get(self, node):
+        hkdf_params = {
+            "salt": None,
+            "info": self.HKDF_INFO_NODE_SECRET + node,
+            "hashmod": hashlib.sha256,
+        }
+        node_secrets = []
+        for master_secret in self._master_secrets:
+            # We want each hex-encoded derived secret to be the same
+            # size as its (presumably hex-encoded) master secret.
+            size = len(master_secret) / 2
+            node_secret = HKDF(master_secret, size=size, **hkdf_params)
+            node_secrets.append(binascii.b2a_hex(node_secret))
+        return node_secrets
+
+    def keys(self):
+        return []
