@@ -22,6 +22,7 @@ import hawkauthlib
 
 from mozsvc.exceptions import BackendError
 from mozsvc.tests.support import TestCase
+from mozsvc.secrets import DerivedSecrets
 
 try:
     from mozsvc.user.noncecache import MemcachedNonceCache
@@ -36,7 +37,7 @@ DEFAULT_SETTINGS = {
     'cef.product': 'weave',
     'cef.use': True,
     'cef.version': 0,
-   'cef.file': 'syslog',
+    'cef.file': 'syslog',
 }
 
 
@@ -164,6 +165,17 @@ class UserTestCase(TestCase):
             "hawkauth.secrets_file": "/dev/null",
         })
         self.assertRaises(ValueError, config2.include, "mozsvc.user")
+
+    def test_that_hawkauth_can_use_custom_secrets_backend(self):
+        config2 = pyramid.testing.setUp()
+        config2.add_settings(DEFAULT_SETTINGS)
+        config2.add_settings({
+            "hawkauth.secrets.backend": "mozsvc.secrets.DerivedSecrets",
+            "hawkauth.secrets.master_secrets": "abcd 123456",
+        })
+        config2.include("mozsvc.user")
+        policy2 = config2.registry.queryUtility(IAuthenticationPolicy)
+        self.assertTrue(isinstance(policy2.secrets, DerivedSecrets))
 
     def test_that_hawkauth_can_use_per_node_hostname_secrets(self):
         with tempfile.NamedTemporaryFile() as sf:
