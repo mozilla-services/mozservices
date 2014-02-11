@@ -20,6 +20,7 @@ requirements.
 
 """
 
+import sys
 import csv
 import binascii
 import os
@@ -160,3 +161,50 @@ class DerivedSecrets(object):
 
     def keys(self):
         return []
+
+
+def manage(args):
+    """Helper for command-line secrets management.
+
+    This function provides some simple command-line helpers for managing
+    secrets.
+
+    To generate a new random secret:
+
+        python -m mozsvc.secrets new [size=32]
+
+    To derive a node-specific secret from a master secret:
+
+        python -m mozsvc.secrets derive <master_secret> <node_name>
+
+    """
+    def report_usage_error():
+        print>>sys.stderr, "\n".join(manage.__doc__.split("\n")[1:])
+        return 1
+
+    if len(args) < 2:
+        return report_usage_error()
+
+    if args[1] == "new":
+        if len(args) > 3:
+            return report_usage_error()
+        try:
+            size = int(args[2])
+        except ValueError:
+            return report_usage_error()
+        except IndexError:
+            size = 32
+        print os.urandom(size).encode('hex')
+        return 0
+
+    if args[1] == "derive":
+        if len(args) != 4:
+            return report_usage_error()
+        print DerivedSecrets([args[2]]).get(args[3])[0]
+        return 0
+
+    return report_usage_error()
+
+
+if __name__ == "__main__":
+    manage(sys.argv)
