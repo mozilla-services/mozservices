@@ -41,7 +41,8 @@ class TestTweens(unittest.TestCase):
 
         r = self._do_request("/backend_error")
         self.assertEquals(r.status_int, 503)
-        self.assertEquals(r.headers["Retry-After"], "17")
+        retry_after = int(r.headers["Retry-After"])
+        self.assertTrue(17 <= retry_after <= 22)
 
     def test_that_backend_errors_can_set_retry_after(self):
         @self._set_backend_error_view
@@ -50,7 +51,8 @@ class TestTweens(unittest.TestCase):
 
         r = self._do_request("/backend_error")
         self.assertEquals(r.status_int, 503)
-        self.assertEquals(r.headers["Retry-After"], "42")
+        retry_after = int(r.headers["Retry-After"])
+        self.assertTrue(42 <= retry_after <= 47)
 
     def test_that_retry_after_doesnt_get_set_to_zero(self):
         @self._set_backend_error_view

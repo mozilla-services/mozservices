@@ -3,6 +3,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import sys
+import random
 import traceback
 import simplejson as json
 
@@ -89,7 +90,41 @@ def log_uncaught_exceptions(handler, registry):
     return log_uncaught_exceptions_tween
 
 
+def fuzz_backoff_headers(handler, registry):
+    """Add some random fuzzing to the value of various backoff headers.
+
+    This can help to avoid a "dogpile" effect where all backed-off clients
+    retry at the same time and overload the server.
+    """
+
+    HEADERS = ["Retry-After", "X-Backoff", "X-Weave-Backoff"]
+
+    def fuzz_response(response):
+        for header in HEADERS:
+            value = response.headers.get(header)
+            if value is not None:
+                # The header value is a backoff duration in seconds.  Fuzz
+                # it upward by up to 5% or 5 seconds, whichever is greater.
+                value = int(value)
+                max_fuzz = max(int(value * 0.05), 5)
+                value += random.randint(0, max_fuzz)
+                response.headers[header] = str(value)
+
+    def fuzz_backoff_headers_tween(request):
+        try:
+            response = handler(request)
+        except HTTPException, response:
+            fuzz_response(response)
+            raise
+        else:
+            fuzz_response(response)
+            return response
+
+    return fuzz_backoff_headers_tween
+
+
 def includeme(config):
     """Include all the mozsvc tweens into the given config."""
     config.add_tween("mozsvc.tweens.catch_backend_errors")
     config.add_tween("mozsvc.tweens.log_uncaught_exceptions")
+    config.add_tween("mozsvc.tweens.fuzz_backoff_headers")
