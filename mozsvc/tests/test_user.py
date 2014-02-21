@@ -23,6 +23,7 @@ import hawkauthlib
 from mozsvc.exceptions import BackendError
 from mozsvc.tests.support import TestCase
 from mozsvc.secrets import DerivedSecrets
+from mozsvc.user.permissivenoncecache import PermissiveNonceCache
 
 try:
     from mozsvc.user.noncecache import MemcachedNonceCache
@@ -341,3 +342,13 @@ class TestMemcachedNonceCache(unittest2.TestCase):
         # Timestamps outside the configured window are rejected.
         self.assertFalse(nc.check_nonce(now() - window - 1, "abc"))
         self.assertFalse(nc.check_nonce(now() + window + 1, "abc"))
+
+
+class TestPermissiveNonceCache(unittest2.TestCase):
+
+    def test_permissiveness(self):
+        nc = PermissiveNonceCache()
+        self.assertTrue(nc.check_nonce(time.time(), "abcd"))
+        self.assertTrue(nc.check_nonce(1234, "abcd"))
+        self.assertTrue(nc.check_nonce(1234, "abcd"))
+        self.assertTrue(nc.check_nonce(987654321987654321, "hijk"))

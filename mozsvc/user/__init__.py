@@ -27,6 +27,7 @@ from cef import log_cef, AUTH_FAILURE
 import mozsvc
 import mozsvc.secrets
 from mozsvc.util import resolve_name
+from mozsvc.user.permissivenoncecache import PermissiveNonceCache
 
 import logging
 logger = logging.getLogger("mozsvc.user")
@@ -107,6 +108,8 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         elif isinstance(secrets, dict):
             secrets = resolve_name(secrets.pop("backend"))(**secrets)
         self.secrets = secrets
+        if "nonce_cache" not in kwds:
+            kwds["nonce_cache"] = PermissiveNonceCache()
         super(TokenServerAuthenticationPolicy, self).__init__(**kwds)
 
     @classmethod
