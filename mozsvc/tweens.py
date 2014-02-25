@@ -7,7 +7,7 @@ import random
 import traceback
 import simplejson as json
 
-from pyramid.httpexceptions import WSGIHTTPException, HTTPServiceUnavailable
+from pyramid.httpexceptions import HTTPException, HTTPServiceUnavailable
 
 import mozsvc
 from mozsvc.exceptions import BackendError
@@ -69,7 +69,7 @@ def log_uncaught_exceptions(handler, registry):
     def log_uncaught_exceptions_tween(request):
         try:
             return handler(request)
-        except WSGIHTTPException:
+        except HTTPException:
             raise
         except Exception:
             logger = get_logger(request)
