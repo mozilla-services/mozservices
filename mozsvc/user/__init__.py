@@ -108,7 +108,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         elif isinstance(secrets, dict):
             secrets = resolve_name(secrets.pop("backend"))(**secrets)
         self.secrets = secrets
-        if "nonce_cache" not in kwds:
+        if kwds.get("nonce_cache") is None:
             kwds["nonce_cache"] = PermissiveNonceCache()
         super(TokenServerAuthenticationPolicy, self).__init__(**kwds)
 

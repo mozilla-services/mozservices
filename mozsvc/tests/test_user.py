@@ -24,6 +24,7 @@ from mozsvc.exceptions import BackendError
 from mozsvc.tests.support import TestCase
 from mozsvc.secrets import DerivedSecrets
 from mozsvc.user.permissivenoncecache import PermissiveNonceCache
+from mozsvc.user import TokenServerAuthenticationPolicy
 
 try:
     from mozsvc.user.noncecache import MemcachedNonceCache
@@ -106,6 +107,12 @@ class UserTestCase(TestCase):
         config.add_settings(DEFAULT_SETTINGS)
         config.include("mozsvc.user")
         return config
+
+    def test_that_the_correct_policy_defaults_are_used(self):
+        policy = self.policy
+        self.assertTrue(isinstance(policy, TokenServerAuthenticationPolicy))
+        self.assertTrue(isinstance(policy.nonce_cache, PermissiveNonceCache))
+        self.assertTrue(policy.secrets is None)
 
     def test_that_authn_policy_can_be_overridden(self):
         self.config.set_authentication_policy(StubAuthenticationPolicy())
