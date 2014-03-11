@@ -10,3 +10,5 @@ tokenlib
 hawkauthlib
 metlog-py[zeromqpub]
 umemcache
+gunicorn
+gevent
