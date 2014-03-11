@@ -123,8 +123,60 @@ def fuzz_backoff_headers(handler, registry):
     return fuzz_backoff_headers_tween
 
 
+def send_backoff_responses(handler, registry):
+    """Send backoff/unavailable responses to a percentage of clients.
+
+    This tween allows the server to respond to a set percentage of traffic with
+    an X-Backoff header and/or a "503 Service Unavilable" response.  The two
+    probabilities are controlled by config options 'mozsvc.backoff_probability'
+    and 'mozsvc.unavailable_probability' respectively.  If neither option is
+    set then the tween is not activated, avoiding overhead in the (hopefully!)
+    common case.
+    """
+    settings = registry.settings
+    backoff_probability = settings.get("mozsvc.backoff_probability", 0)
+    unavailable_probability = settings.get("mozsvc.unavailable_probability", 0)
+    retry_after = settings.get("mozsvc.retry_after", 1800)
+
+    if backoff_probability:
+
+        def add_backoff_header(response):
+            if "X-Backoff" not in response.headers:
+                if "X-Weave-Backoff" not in response.headers:
+                    response.headers["X-Backoff"] = str(retry_after)
+                    response.headers["X-Weave-Backoff"] = str(retry_after)
+
+        def send_backoff_header_tween(request, handler=handler):
+            try:
+                response = handler(request)
+            except HTTPException, response:
+                if random.random() < backoff_probability:
+                    add_backoff_header(response)
+                raise
+            else:
+                if random.random() < backoff_probability:
+                    add_backoff_header(response)
+                return response
+
+        handler = send_backoff_header_tween
+
+    if unavailable_probability:
+
+        def send_unavailable_response_tween(request, handler=handler):
+            if random.random() < unavailable_probability:
+                return HTTPServiceUnavailable(body="0",
+                                              retry_after=retry_after,
+                                              content_type="application/json")
+            return handler(request)
+
+        handler = send_unavailable_response_tween
+
+    return handler
+
+
 def includeme(config):
     """Include all the mozsvc tweens into the given config."""
     config.add_tween("mozsvc.tweens.catch_backend_errors")
     config.add_tween("mozsvc.tweens.log_uncaught_exceptions")
     config.add_tween("mozsvc.tweens.fuzz_backoff_headers")
+    config.add_tween("mozsvc.tweens.send_backoff_responses")
