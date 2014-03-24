@@ -117,7 +117,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         """Parse settings for an instance of this class."""
         supercls = super(TokenServerAuthenticationPolicy, cls)
         kwds = supercls._parse_settings(settings)
-        # collection leftover settings into a config for a Secrets object,
+        # collect leftover settings into a config for a Secrets object,
         # wtih some b/w compat for old-style secret-handling settings.
         secrets_prefix = "secrets."
         secrets = {}
