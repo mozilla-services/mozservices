@@ -119,26 +119,26 @@ class UserTestCase(TestCase):
         self.config.commit()
         # Good password => successful auth via request.user
         request = self.make_request(environ={
-                    "HTTP_X_USERNAME": "user1",
-                    "HTTP_X_PASSWORD": "user1",
-                  })
+            "HTTP_X_USERNAME": "user1",
+            "HTTP_X_PASSWORD": "user1",
+        })
         self.assertEquals(request.user["uid"], "user1")
         self.assertEquals(request.user["x-was-ere"], True)
         # Bad password => request.user is empty
         request = self.make_request(environ={
-                    "HTTP_X_USERNAME": "user1",
-                    "HTTP_X_PASSWORD": "BAD PASSWORD",
-                  })
+            "HTTP_X_USERNAME": "user1",
+            "HTTP_X_PASSWORD": "BAD PASSWORD",
+        })
         self.assertFalse(request.user)
         # No username => request.user is empty
         request = self.make_request(environ={
-                    "HTTP_X_PASSWORD": "password1",
-                  })
+            "HTTP_X_PASSWORD": "password1",
+        })
         self.assertFalse(request.user)
         # No password => request.user is empty
         request = self.make_request(environ={
-                    "HTTP_X_USERNAME": "user1",
-                  })
+            "HTTP_X_USERNAME": "user1",
+        })
         self.assertFalse(request.user)
 
     def test_that_hawkauth_is_used_by_default(self):
@@ -254,7 +254,7 @@ class UserTestCase(TestCase):
             }))
             req.host_url = "http://host1.com:80"
             id = tokenlib.make_token({"uid": 42, "node": req.host_url[:-3]},
-                                      secret="secret11")
+                                     secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             hawkauthlib.sign_request(req, id, key)
             self.assertEquals(authenticated_userid(req), 42)
@@ -326,9 +326,11 @@ class TestMemcachedNonceCache(unittest2.TestCase):
         # Monkeypatch it to remember any keys we use,
         # so we can delete them during cleanup.
         orig_add = mcclient.add
+
         def add_and_remember(key, *args, **kwds):
             self.keys_to_delete.add(key)
             return orig_add(key, *args, **kwds)
+
         mcclient.add = add_and_remember
 
     def test_operation(self, now=lambda: int(time.time())):

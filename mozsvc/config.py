@@ -162,12 +162,8 @@ def load_into_settings(filename, settings):
             config = Configurator(settings=settings)
 
     """
-    filename = os.path.abspath(
-                 os.path.normpath(
-                   os.path.expandvars(
-                     os.path.expanduser(
-                       filename))))
-
+    filename = os.path.expandvars(os.path.expanduser(filename))
+    filename = os.path.abspath(os.path.normpath(filename))
     config = Config(filename)
 
     # Put values from the config file into the pyramid settings dict.

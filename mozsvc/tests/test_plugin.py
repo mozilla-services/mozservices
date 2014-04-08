@@ -69,10 +69,10 @@ class TestPluginLoading(unittest.TestCase):
 
     def test_loading_from_settings(self):
         settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test1.arg1": 1,
-          "test1.hello": "world",
-          "test2.dontusethis": "seriously",
+            "test1.backend": "mozsvc.tests.test_plugin.Test1",
+            "test1.arg1": 1,
+            "test1.hello": "world",
+            "test2.dontusethis": "seriously",
         }
         config = Configurator(settings=settings)
         plugin = load_and_register("test1", config)
@@ -86,9 +86,9 @@ class TestPluginLoading(unittest.TestCase):
 
     def test_loading_several_plugins(self):
         settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test1.hello": "world",
-          "test2.backend": "mozsvc.tests.test_plugin.Test2",
+            "test1.backend": "mozsvc.tests.test_plugin.Test1",
+            "test1.hello": "world",
+            "test2.backend": "mozsvc.tests.test_plugin.Test2",
         }
         config = Configurator(settings=settings)
         plugin1 = load_and_register("test1", config)
@@ -108,8 +108,8 @@ class TestPluginLoading(unittest.TestCase):
 
     def test_loading_with_conflict_detection(self):
         settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
+            "test1.backend": "mozsvc.tests.test_plugin.Test1",
+            "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
         }
         config = Configurator(settings=settings)
         load_and_register("test1", config)
@@ -118,9 +118,9 @@ class TestPluginLoading(unittest.TestCase):
 
     def test_loading_with_conflict_resolution(self):
         settings = {
-          "test1.backend": "mozsvc.tests.test_plugin.Test1",
-          "test2.backend": "mozsvc.tests.test_plugin.Test2",
-          "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
+            "test1.backend": "mozsvc.tests.test_plugin.Test1",
+            "test2.backend": "mozsvc.tests.test_plugin.Test2",
+            "test_both.backend": "mozsvc.tests.test_plugin.Test1And2",
         }
 
         # Load plugin_both last, it will win for both interfaces.

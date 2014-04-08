@@ -64,4 +64,4 @@ class TestUtil(unittest.TestCase):
                          'http://88.191.140.69/')
 
         self.assertEqual(dnslookup('http://user:pass@ziade.org:80/path'),
-                        'http://user:pass@88.191.140.69:80/path')
+                         'http://user:pass@88.191.140.69:80/path')
