@@ -140,6 +140,8 @@ def send_backoff_responses(handler, registry):
 
     if backoff_probability:
 
+        backoff_probability = float(backoff_probability)
+
         def add_backoff_header(response):
             if "X-Backoff" not in response.headers:
                 if "X-Weave-Backoff" not in response.headers:
@@ -161,6 +163,8 @@ def send_backoff_responses(handler, registry):
         handler = send_backoff_header_tween
 
     if unavailable_probability:
+
+        unavailable_probability = float(unavailable_probability)
 
         def send_unavailable_response_tween(request, handler=handler):
             if random.random() < unavailable_probability:

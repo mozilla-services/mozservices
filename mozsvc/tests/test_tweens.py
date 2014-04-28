@@ -144,3 +144,13 @@ class TestBackoffResponseTween(unittest.TestCase):
         self.assertTrue(backoff_count < count)
         self.assertTrue(unavail_count > 0)
         self.assertTrue(unavail_count < count)
+
+    def test_that_unavail_and_backoff_can_be_passed_as_strings(self):
+        self.config.registry.settings["mozsvc.backoff_probability"] = "0.5"
+        self.config.registry.settings["mozsvc.unavailable_probability"] = "0.5"
+        self.config.include("mozsvc")
+        count, backoff_count, unavail_count = self._do_requests()
+        self.assertTrue(backoff_count > 0)
+        self.assertTrue(backoff_count < count)
+        self.assertTrue(unavail_count > 0)
+        self.assertTrue(unavail_count < count)
