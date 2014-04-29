@@ -12,3 +12,4 @@ metlog-py[zeromqpub]
 umemcache
 gunicorn
 gevent
+konfig

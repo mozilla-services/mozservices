@@ -74,14 +74,6 @@ class InvalidCodeError(Exception):
     pass
 
 
-class EnvironmentNotFoundError(Error):
-    """Raised when an environment variable is not found"""
-
-    def __init__(self, varname):
-        Error.__init__(self, 'Variable not found %r' % varname)
-        self.varname = varname
-
-
 class MethodNotFoundError(Error):
     ''' Raised when a method lookup fails '''
     pass

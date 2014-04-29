@@ -10,7 +10,6 @@ import tempfile
 import os
 from StringIO import StringIO
 
-from mozsvc.exceptions import EnvironmentNotFoundError
 from mozsvc.config import (Config, SettingsDict, load_into_settings,
                            get_configurator)
 
@@ -28,7 +27,7 @@ lines = 1
         3
 
 env = some ${__STUFF__}
-location = %%(here)s
+location =  $${HERE}
 
 [two]
 a = b
@@ -41,7 +40,7 @@ two = "a"
 
 [three]
 more = stuff
-location = %(here)s
+location = ${HERE}
 """
 
 _FILE_THREE = """\
@@ -123,9 +122,6 @@ class ConfigTestCase(unittest.TestCase):
         map = config.get_map('one')
         self.assertEquals(map['foo'], 'bar')
 
-        del os.environ['__STUFF__']
-        self.assertRaises(EnvironmentNotFoundError, config.get, 'one', 'env')
-
         # extends
         self.assertEquals(config.get('three', 'more'), 'stuff')
         self.assertEquals(config.get('one', 'two'), 'a')
@@ -203,7 +199,7 @@ class ConfigTestCase(unittest.TestCase):
     def test_location_interpolation(self):
         config = Config(self.file_one)
         # file_one is a StringIO, so it has no location.
-        self.assertEquals(config.get('one', 'location'), '%(here)s')
+        self.assertEquals(config.get('one', 'location'), '${HERE}')
         # file_two is a real file, so it has a location.
         file_two_loc = os.path.dirname(self.file_two)
         self.assertEquals(config.get('three', 'location'), file_two_loc)
