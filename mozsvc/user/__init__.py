@@ -212,7 +212,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
             node_name = node_name[:-3]
         elif node_name.startswith("https:") and node_name.endswith(":443"):
             node_name = node_name[:-4]
-        return node_name
+        return node_name + request.script_name
 
     def _get_token_secrets(self, node_name):
         """Get the list of possible secrets for signing tokens."""
