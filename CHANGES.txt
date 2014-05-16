@@ -2,6 +2,10 @@
 ===
 
 - compatibility fixes for cornice>=0.17
+- config options to generate backoff/unavailable responses
+- custom gevent worker with per-request timeouts
+- use hawkauth instead of macauth for default auth policy
+- shared-secret management scripts
 
 
 0.7 - 2012-11-14
