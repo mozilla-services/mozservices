@@ -15,18 +15,6 @@ from mozsvc.exceptions import BackendError
 from mozsvc.middlewares import create_hash
 
 
-def get_logger(request):
-    """Get the logger object to use for the given request.
-
-    This will return a metlog client if one is attached to the request,
-    or the default mozsvc.logger object if not.
-    """
-    logger = request.registry.get("metlog")
-    if logger is None:
-        logger = mozsvc.logger
-    return logger
-
-
 def catch_backend_errors(handler, registry):
     """Tween to turn BackendError into a 503 response.
 
@@ -37,7 +25,6 @@ def catch_backend_errors(handler, registry):
         try:
             return handler(request)
         except BackendError as err:
-            logger = get_logger(request)
             err_info = str(err)
             err_trace = traceback.format_exc()
             try:
@@ -46,8 +33,8 @@ def catch_backend_errors(handler, registry):
                 extra_info = "user: -"
             error_log = "%s\n%s\n%s" % (err_info, err_trace, extra_info)
             hash = create_hash(error_log)
-            logger.error(hash)
-            logger.error(error_log)
+            mozsvc.logger.error(hash)
+            mozsvc.logger.error(error_log)
             msg = json.dumps("application error: crash id %s" % hash)
             if err.retry_after is not None:
                 if err.retry_after == 0:
@@ -65,7 +52,7 @@ def catch_backend_errors(handler, registry):
 
 
 def log_uncaught_exceptions(handler, registry):
-    """Tween to log all uncaught exceptions via metlog."""
+    """Tween to log all uncaught exceptions."""
 
     def log_uncaught_exceptions_tween(request):
         try:
@@ -73,11 +60,10 @@ def log_uncaught_exceptions(handler, registry):
         except HTTPException:
             raise
         except Exception:
-            logger = get_logger(request)
             lines = ["Uncaught exception while processing request:\n"]
             lines.append("%s %s\n" % (request.method, request.path_url))
             lines.append(safer_format_traceback(*sys.exc_info()))
-            logger.exception("".join(lines))
+            mozsvc.logger.error("".join(lines))
             raise
 
     return log_uncaught_exceptions_tween

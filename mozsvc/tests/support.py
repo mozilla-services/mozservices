@@ -15,15 +15,6 @@ from wsgiproxy.app import WSGIProxyApp
 
 from mozsvc.config import get_configurator
 
-DEFAULT_SETTINGS = {
-    'cef.vendor': 'mozilla',
-    'cef.device_version': '1.3',
-    'cef.product': 'test',
-    'cef.use': True,
-    'cef.version': 0,
-    'cef.file': 'syslog',
-}
-
 
 def get_test_configurator(root, ini_file="tests.ini"):
     """Find a file with testing settings, turn it into a configurator."""
@@ -36,7 +27,7 @@ def get_test_configurator(root, ini_file="tests.ini"):
             raise RuntimeError("cannot locate " + ini_file)
         ini_dir = os.path.split(ini_dir)[0]
 
-    config = get_configurator({"__file__": ini_path}, **DEFAULT_SETTINGS)
+    config = get_configurator({"__file__": ini_path})
     return config
 
 

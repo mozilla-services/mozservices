@@ -35,16 +35,6 @@ except (ImportError, BackendError):
     MEMCACHED = False
 
 
-DEFAULT_SETTINGS = {
-    'cef.vendor': 'mozilla',
-    'cef.device_version': '1.3',
-    'cef.product': 'weave',
-    'cef.use': True,
-    'cef.version': 0,
-    'cef.file': 'syslog',
-}
-
-
 class ExpandoRequest(object):
     """Proxy class for setting arbitrary attributes on a request.
 
@@ -106,7 +96,6 @@ class UserTestCase(TestCase):
 
     def get_configurator(self):
         config = super(UserTestCase, self).get_configurator()
-        config.add_settings(DEFAULT_SETTINGS)
         config.include("mozsvc.user")
         return config
 
@@ -169,7 +158,6 @@ class UserTestCase(TestCase):
 
     def test_that_hawkauth_cant_use_both_secret_and_secrets_file(self):
         config2 = pyramid.testing.setUp()
-        config2.add_settings(DEFAULT_SETTINGS)
         config2.add_settings({
             "hawkauth.secret": "DARTH VADER IS LUKE'S FATHER",
             "hawkauth.secrets_file": "/dev/null",
@@ -178,7 +166,6 @@ class UserTestCase(TestCase):
 
     def test_that_hawkauth_can_use_custom_secrets_backend(self):
         config2 = pyramid.testing.setUp()
-        config2.add_settings(DEFAULT_SETTINGS)
         config2.add_settings({
             "hawkauth.secrets.backend": "mozsvc.secrets.DerivedSecrets",
             "hawkauth.secrets.master_secrets": "abcd 123456",
@@ -196,7 +183,6 @@ class UserTestCase(TestCase):
             sf.flush()
             # Configure the plugin to load them.
             config2 = pyramid.testing.setUp()
-            config2.add_settings(DEFAULT_SETTINGS)
             config2.add_settings({
                 "hawkauth.secrets_file": sf.name,
             })

@@ -16,6 +16,7 @@ import sys
 import time
 import thread
 import signal
+import logging
 import traceback
 
 import greenlet
@@ -23,7 +24,8 @@ import gevent.hub
 
 from gunicorn.workers.ggevent import GeventWorker
 
-from metlog.holder import CLIENT_HOLDER
+
+logger = logging.getLogger("mozsvc.gunicorn_worker")
 
 # Take references to un-monkey-patched versions of stuff we need.
 # Monkey-patching will have already been done by the time we come to
@@ -149,24 +151,12 @@ class MozSvcGeventWorker(GeventWorker):
                         frame = sys._current_frames()[self._main_thread_id]
                         stack = traceback.format_stack(frame)
                         err_log = ["Greenlet appears to be blocked\n"] + stack
-                        self._log_error("".join(err_log))
+                        logger.error("".join(err_log))
         except Exception:
             # Swallow any exceptions raised during interpreter shutdown.
             # Daemonic Thread objects have this same behaviour.
             if sys is not None:
                 raise
-
-    def _log_error(self, msg):
-        """Log an error message.
-
-        This will send the error message out via metlog if it is configured,
-        or to stderr otherwise.
-        """
-        logger = CLIENT_HOLDER.default_client
-        if logger is not None:
-            logger.error(msg)
-        else:
-            print>>sys.stderr, msg
 
     def _dump_memory_usage(self, *args):
         """Dump memory usage data to a file.

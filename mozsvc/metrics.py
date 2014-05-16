@@ -14,183 +14,185 @@ server configuration, as well as a decorator to time arbitrary
 functions.
 """
 
-from contextlib import contextmanager
-from cornice import Service
-from metlog.config import client_from_dict_config
-from metlog.decorators import timeit, incr_count
-from metlog.decorators.base import MetlogDecorator
-from metlog.holder import CLIENT_HOLDER
-from metlog.logging import hook_logger
-from metlog.senders.logging import StdLibLoggingSender
-import threading
+import re
+import json
+import timeit
+import logging
+import functools
 
-from mozsvc.plugin import load_from_settings
+import pyramid.threadlocal
+from pyramid.events import NewRequest
 
 
-_LOCAL_STORAGE = threading.local()
+logger = logging.getLogger("mozsvc.metrics")
+
+COMMA_SEPARATED = re.compile(r"\s*,\s*")
 
 
-# Default settings to use when there is no "metlog" section in the config file.
-DEFAULT_METLOG_SETTINGS = {
-    "metlog.backend": "mozsvc.metrics.MetlogPlugin",
-    "metlog.sender_class": "metlog.senders.logging.StdLibLoggingSender",
-    "metlog.sender_json_types": [],
-}
+def initialize_request_metrics(request, defaults={}):
+    """Request callback to add a "metrics" dict.
 
-
-def setup_metlog(config_dict, default=False):
+    This function should be invoked upon each new request.  It will create
+    a request.metrics dict into which the application can store any runtime
+    logging or metrics data, and will add response callbacks to log the
+    contents of this dict once the request is complete.
     """
-    Instantiate a Metlog client and add it to the client holder.
+    # Create the request.metrics dict.
+    request.metrics = defaults.copy()
+    # Add in some basic information about the request
+    # that should always be logged.
+    request.metrics["method"] = request.method
+    request.metrics["path"] = request.path_url
+    request.metrics["agent"] = request.user_agent or ""
+    xff = request.headers.get('X-Forwarded-For', '')
+    xff = [ip for ip in COMMA_SEPARATED.split(xff) if ip]
+    if request.remote_addr:
+        xff.append(request.remote_addr)
+    request.metrics["remoteAddressChain"] = xff
+    request.metrics["request_start_time"] = timeit.default_timer()
+    # Add hooks to log the metrics at the end of the request.
+    request.add_response_callback(add_response_metrics)
+    request.add_finished_callback(finalize_request_metrics)
 
-    :param config_dict: Dictionary object containing the metlog client
-                        configuration.
-    :param default: Should this be specified as CLIENT_HOLDER's default
-                    client? Note that the first client to be added will
-                    automatically be specified as the default, regardless
-                    of the value of this argument.
+
+def add_response_metrics(request, response):
+    """Response callback to add metrics about a successfully-handled request.
+
+    This function should be invoked when a request has been successfully
+    handled and a response generated.  It will annotate the request.metrics
+    dict with information about the total runtime and the resulting response.
+
+    Note that this function is typically added to requests as a "response
+    callback", which means that it will *not* be executed in case an unhandled
+    exception occurs during request processing.
     """
-    name = config_dict.get('logger', '')
-    client = CLIENT_HOLDER.get_client(name)
-    client = client_from_dict_config(config_dict, client)
-    if default:
-        CLIENT_HOLDER.set_default_client_name(name)
+    start_time = request.metrics.pop("request_start_time")
+    request.metrics["request_time"] = timeit.default_timer() - start_time
+    request.metrics["code"] = request.response.status_code
 
 
-def teardown_metlog():
-    pass
+def finalize_request_metrics(request, message=None):
+    """Finalize and log the collected request metrics.
 
+    This function should be invoked once request handling is complete.
+    It will finalize some details of the request.metrics dict and then
+    emit a log line with its contents.
 
-def get_metlog_client(name=None):
+    By default the log line will be a simple JSON dump of all the metrics.
+    This can be set to a custom message using the optional "message" argument.
+
+    Note that this function is typically added to requests as a "finished
+    callback" so that it will be invoked unconditionally at the end of
+    request processing.
     """
-    Return the specified Metlog client from the CLIENT_HOLDER.
-
-    :param name: Name of metlog client to fetch. If not provided the
-                 holder's specified default client will be used.
-    """
-    if name is not None:
-        client = CLIENT_HOLDER.get_client(name)
+    # If the add_response_metrics() callback did not get invoked, there
+    # was probably any error in request processing.  Fill in some defaults
+    # and a special status code.  The unhandled error will be logged by
+    # other parts of the infrastructure.
+    if "request_time" not in request.metrics:
+        start_time = request.metrics.pop("request_start_time")
+        request.metrics["request_time"] = timeit.default_timer() - start_time
+        request.metrics["code"] = 999
+    # Emit the a summary log line.
+    if message is None:
+        logger.info(json.dumps(request.metrics), extra=request.metrics)
     else:
-        client = CLIENT_HOLDER.default_client
-    return client
+        logger.info(message, extra=request.metrics)
 
 
-class MetlogPlugin(object):
-    def __init__(self, **kwargs):
-        setup_metlog(kwargs)
-        self.client = CLIENT_HOLDER.default_client
+def annotate_request(request, key, value):
+    """Add or update an entry in the request.metrics dict.
 
+    This is a helper function for storing data in the request.metrics dict.
+    It provides some simple conveniences for the calling code:
 
-def load_metlog_client(config):
-    """Load and return a metlog client for the given Pyramid Configurator.
+        * If the request is None, then pyramid's threadlocals are used
+          to find the current request object.
+        * If the request has no metrics dict then it is silently ignored,
+          so this is safe to call from contexts that may not metrics-enabled.
+        * If the key already exists in the metrics dict, it is added to
+          rather than being overwritten.
 
-    This is a shortcut function to load and return the metlog client specified
-    by the given Pyramid Configurator object.  If the configuration does not
-    specify any metlog settings, a default client is constructed that routes
-    all messages into the stdlib logging routines.
-
-    The metlog client is cached in the Configurator's registry, so multiple
-    calls to this function will return a single instance.
     """
-    settings = config.registry.settings
-    client = config.registry.get("metlog")
-    if client is None:
-        if "metlog.backend" not in settings:
-            settings.update(DEFAULT_METLOG_SETTINGS)
-        client = load_from_settings('metlog', settings).client
-        config.registry['metlog'] = client
-        if not isinstance(client.sender, StdLibLoggingSender):
-            hook_logger("mozsvc", client)
-    return client
+    if request is None:
+        request = pyramid.threadlocal.get_current_request()
+    if request is not None:
+        try:
+            if key in request.metrics:
+                request.metrics[key] += value
+            else:
+                request.metrics[key] = value
+        except AttributeError:
+            pass
 
 
-def get_tlocal():
+class metrics_timer(object):
+    """Decorator/context-manager to transparently time chunks of code.
+
+    This class produces a timing decorator/context-manager that will place
+    its result in the request.metrics dict upon completion.
+
+    It uses pyramid threadlocals to get the current request object, which is
+    a little bit icky but very convenient.  If you have the proper request
+    object, you can pass it as an optional argument to the constructor.
+
+    It can be used as a context-manager to time a chunk of code, like this:
+
+        with metrics_timer("my.timer"):
+            do_some_stuff()
+
+    Or applied as a function decorator like this:
+
+        @metrics_timer("my.timer")
+        def do_some_stuff():
+            do_more_stuff()
+
     """
-    Return the thread local metlog context dict, if it exists. This should only
-    succeed from within a `thread_context` context manager. If we're not within
-    such a context manager (and thus the metlog context dict doesn't exist)
-    then an AttributeError will be raised.
-    """
-    if not hasattr(_LOCAL_STORAGE, 'metlog_context_dict'):
-        raise AttributeError("No `metlog_context_dict`; are you in a "
-                             "thread_context?")
-    return _LOCAL_STORAGE.metlog_context_dict
+
+    def __init__(self, key, request=None):
+        self.key = key
+        self._request = request
+
+    def annotate_request(self, value, key=None, request=None):
+        if key is None:
+            key = self.key
+        if request is None:
+            request = self._request
+        annotate_request(request, key, value)
+
+    # When used as a context-manager, times the enclosed code.
+
+    def __enter__(self):
+        self.start_time = timeit.default_timer()
+        return self
+
+    def __exit__(self, exc_typ=None, exc_val=None, exc_tb=None):
+        stop_time = timeit.default_timer()
+        self.annotate_request(stop_time - self.start_time)
+
+    # When called, applies itself as a function decorator.
+
+    def __call__(self, func):
+
+        @functools.wraps(func)
+        def timed_func(*args, **kwds):
+            # We can't use "with self" here since that stores state on
+            # the object, and hence plays badly with threading or recursion.
+            start_time = timeit.default_timer()
+            try:
+                return func(*args, **kwds)
+            finally:
+                stop_time = timeit.default_timer()
+                self.annotate_request(stop_time - start_time)
+
+        return timed_func
 
 
-@contextmanager
-def thread_context(callback):
-    """
-    This is a context manager that accepts a callback function and returns a
-    thread local dictionary object. Upon exit, the callback function will be
-    called and passed that dictionary as the sole argument, after which the
-    dictionary will be deleted.
-    """
-    _LOCAL_STORAGE.metlog_context_dict = dict()
-    yield _LOCAL_STORAGE.metlog_context_dict
-    try:
-        callback(_LOCAL_STORAGE.metlog_context_dict)
-    finally:
-        del _LOCAL_STORAGE.metlog_context_dict
+def new_request_listener(event):
+    """NewRequest event-listener that adds request metrics."""
+    initialize_request_metrics(event.request)
 
 
-class send_mozsvc_data(MetlogDecorator):
-    """
-    Decorator that can be wrapped around a view method which will check the
-    `metlog_context_dict` threadlocal and, if not empty, generate a metlog
-    message of type `mozsvc` with the contained data.
-    """
-    def metlog_call(self, *args, **kwargs):
-        def send_logmsg(mozsvc_data):
-            """
-            Stuff the threadlocal data into the message and send it out.
-            """
-            if mozsvc_data:
-                self.client.metlog('mozsvc', fields=mozsvc_data)
-
-        with thread_context(send_logmsg):
-            return self._fn(*args, **kwargs)
-
-
-def update_mozsvc_data(update_data):
-    """
-    Update the `metlog_context_dict` with data that will be sent out via metlog
-    after request processing.
-    """
-    get_tlocal().update(update_data)
-
-
-class MetricsService(Service):
-
-    def __init__(self, **kw):
-        self._decorators = kw.pop('decorators', [timeit, incr_count,
-                                                 send_mozsvc_data])
-        # To work properly with venusian, we have to specify the number of
-        # frames between the call to venusian.attach and the definition of
-        # the attached function.  Cornice defaults to 1, and we add another.
-        kw.setdefault('depth', 2)
-        Service.__init__(self, **kw)
-
-    def decorator(self, method, **kw):
-        """
-        Returns a wrapper that will wrap the view callable w/ metlog
-        decorators for timing and logging wsgi variables, then register
-        it with the service definition as a view.
-        """
-        decorators = kw.pop('decorators', self._decorators)
-
-        def wrapper(func):
-            applied_set = set()
-            if hasattr(func, '_metlog_decorators'):
-                applied_set.update(func._metlog_decorators)
-            for decorator in decorators:
-                # Stacked api decorators may result in this being called more
-                # than once for the same function, we need to make sure that
-                # the original function isn't wrapped more than once by the
-                # same decorator.
-                if decorator not in applied_set:
-                    func = decorator(func)
-                    applied_set.add(decorator)
-            func._metlog_decorators = applied_set
-            self.add_view(method, func, **kw)
-            return func
-
-        return wrapper
+def includeme(config):
+    """Include the mozsvc metrics hooks into the given config."""
+    config.add_subscriber(new_request_listener, NewRequest)

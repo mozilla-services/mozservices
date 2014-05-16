@@ -6,6 +6,8 @@
 - custom gevent worker with per-request timeouts
 - use hawkauth instead of macauth for default auth policy
 - shared-secret management scripts
+- removed dependency on metlog, replacing it with stdlib logging
+  and a very simple scheme for annotating metrics onto a request.
 
 
 0.7 - 2012-11-14

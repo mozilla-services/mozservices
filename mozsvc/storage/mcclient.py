@@ -11,6 +11,7 @@ for serialization, error reporting and connection pooling.
 
 import sys
 import time
+import logging
 import traceback
 import contextlib
 import Queue
@@ -21,9 +22,10 @@ except ImportError:
 
 import umemcache
 
-import mozsvc
 from mozsvc.exceptions import BackendError
 
+
+logger = logging.getLogger("mozsvc.storage.mcclient")
 
 DEFAULT_MAX_KEY_SIZE = 250
 DEFAULT_MAX_VALUE_SIZE = 20 * 1024 * 1024
@@ -43,14 +45,13 @@ class MemcachedClient(object):
     """
 
     def __init__(self, servers=None, key_prefix="", pool_size=None,
-                 pool_timeout=60, logger=None, max_key_size=None,
-                 max_value_size=None, **kwds):
+                 pool_timeout=60, max_key_size=None, max_value_size=None,
+                 **kwds):
         if servers is None:
             servers = ["127.0.0.1:11211"]
         elif isinstance(servers, basestring):
             servers = [servers]
         self.key_prefix = key_prefix
-        self._logger = logger
         # XXX TODO: umemcache doesn't support clustering.
         # We could implement this ourselves, but is it worth it?
         if len(servers) > 1:
@@ -60,17 +61,6 @@ class MemcachedClient(object):
         self.pool = MCClientPool(servers[0], pool_size, pool_timeout)
         self.max_key_size = max_key_size or DEFAULT_MAX_KEY_SIZE
         self.max_value_size = max_value_size or DEFAULT_MAX_VALUE_SIZE
-
-    @property
-    def logger(self):
-        """Property to lazily extract a default logger from runtime environ."""
-        if self._logger is None:
-            try:
-                from pyramid.threadlocal import get_current_registry
-                self._logger = get_current_registry()["metlog"]
-            except (ImportError, KeyError):
-                self._logger = mozsvc.logger
-        return self._logger
 
     @contextlib.contextmanager
     def _connect(self):
@@ -90,7 +80,7 @@ class MemcachedClient(object):
                     raise
         except (EnvironmentError, RuntimeError), err:
             err = traceback.format_exc()
-            self.logger.error(err)
+            logger.error(err)
             raise BackendError(str(err))
 
     def _encode_key(self, key):

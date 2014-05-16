@@ -22,8 +22,6 @@ from pyramid_hawkauth import HawkAuthenticationPolicy
 
 import tokenlib
 
-from cef import log_cef, AUTH_FAILURE
-
 import mozsvc
 import mozsvc.secrets
 from mozsvc.util import resolve_name
@@ -143,15 +141,13 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
         is raised.
 
         The TokenServerAuthenticationPolicy implementation wraps the default
-        HawkAuthenticationPolicy implementation with some cef logging.
+        HawkAuthenticationPolicy implementation with some logging.
         """
         supercls = super(TokenServerAuthenticationPolicy, self)
         try:
             return supercls._check_signature(request, key)
         except HTTPUnauthorized:
-            log_cef("Authentication Failed: invalid hawk signature", 5,
-                    request.environ, request.registry.settings,
-                    "", signature=AUTH_FAILURE)
+            logger.warn("Authentication Failed: invalid hawk signature")
             raise
 
     def decode_hawk_id(self, request, tokenid):
@@ -180,9 +176,7 @@ class TokenServerAuthenticationPolicy(HawkAuthenticationPolicy):
             except (ValueError, KeyError):
                 pass
         else:
-            log_cef("Authentication Failed: invalid hawk id", 5,
-                    request.environ, request.registry.settings,
-                    "", signature=AUTH_FAILURE)
+            logger.warn("Authentication Failed: invalid hawk id")
             raise ValueError("invalid Hawk id")
         return userid, key
 

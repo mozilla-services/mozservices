@@ -8,7 +8,6 @@ WSGIProxy
 pyramid_hawkauth
 tokenlib
 hawkauthlib
-metlog-py[zeromqpub]
 umemcache
 gunicorn
 gevent

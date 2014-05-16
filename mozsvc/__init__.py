@@ -20,4 +20,5 @@ def includeme(config):
     """
     config.add_route('heartbeat', '/__heartbeat__')
     config.include('mozsvc.tweens')
+    config.include('mozsvc.metrics')
     config.scan('mozsvc.views')
