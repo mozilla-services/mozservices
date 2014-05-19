@@ -18,7 +18,7 @@ requires = ['pyramid', 'simplejson', 'cef', 'konfig']
 tests_require = requires + [
             'pyramid_hawkauth', 'tokenlib', 'hawkauthlib>=0.1.1',
             'cornice>=0.10', 'wsgiproxy', 'unittest2', 'webtest',
-            'gunicorn', 'gevent']
+            'gunicorn', 'gevent', 'testfixtures']
 
 extras_require = {
     'metlog': ['metlog-py>=0.9.1'],

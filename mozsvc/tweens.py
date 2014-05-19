@@ -10,6 +10,7 @@ import simplejson as json
 from pyramid.httpexceptions import HTTPException, HTTPServiceUnavailable
 
 import mozsvc
+from mozsvc.util import safer_format_traceback
 from mozsvc.exceptions import BackendError
 from mozsvc.middlewares import create_hash
 
@@ -73,17 +74,9 @@ def log_uncaught_exceptions(handler, registry):
             raise
         except Exception:
             logger = get_logger(request)
-            # We don't want to write arbitrary user-provided data into the
-            # the logfiles.  For example, the sort of data that might show
-            # up in the payload of a ValueError exception.
-            # Format the traceback using standard printing, but use repr()
-            # on the exception value itself to avoid this issue.
-            exc_type, exc_val, exc_tb = sys.exc_info()
             lines = ["Uncaught exception while processing request:\n"]
             lines.append("%s %s\n" % (request.method, request.path_url))
-            lines.extend(traceback.format_tb(exc_tb))
-            lines.append("%r\n" % (exc_type,))
-            lines.append("%r\n" % (exc_val,))
+            lines.append(safer_format_traceback(*sys.exc_info()))
             logger.exception("".join(lines))
             raise
 

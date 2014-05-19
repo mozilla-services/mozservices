@@ -4,9 +4,13 @@
 # file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 # ***** END LICENSE BLOCK *****
-import urlparse
-import urllib
+
+import json
 import time
+import urllib
+import logging
+import urlparse
+import traceback
 from decimal import Decimal, InvalidOperation
 
 from pyramid.util import DottedNameResolver
@@ -95,3 +99,59 @@ def dnslookup(url):
 
     parts = [parsed_url[0]] + [host] + list(parsed_url[2:])
     return urlparse.urlunparse(parts)
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Log formatter that outputs machine-readable json.
+
+    This log formatter outputs JSON format messages that are compatible with
+    Mozilla's standard heka-based log aggregation infrastructure.  It ignores
+    any user-specific message and instead outouts a JSON dict of all relevant
+    log-record attributes.
+    """
+
+    DEFAULT_LOGRECORD_ATTRS = set((
+        'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
+        'funcName', 'levelname', 'levelno', 'lineno', 'module', 'msecs',
+        'message', 'msg', 'name', 'pathname', 'process', 'processName',
+        'relativeCreated', 'thread', 'threadName'
+    ))
+
+    def format(self, record):
+        # Take default values from the record and the environment.
+        details = {
+            "op": record.name,
+            "name": record.name,
+            "time": int(record.created * 1000),
+            "pid": record.process,
+        }
+        # Include any custom attributes set on the record.
+        # These would usually be collected metrics data.
+        for key, value in record.__dict__.iteritems():
+            if key not in self.DEFAULT_LOGRECORD_ATTRS:
+                details[key] = value
+        # Only include the 'message' key if it has useful content.
+        message = record.getMessage()
+        if message:
+            details["message"] = message
+        # If there is an error, format it for nice output.
+        if record.exc_info is not None:
+            details["error"] = repr(record.exc_info[1])
+            details["traceback"] = safer_format_traceback(*record.exc_info)
+        return json.dumps(details)
+
+
+def safer_format_traceback(exc_typ, exc_val, exc_tb):
+    """Format an exception traceback into safer string.
+
+    We don't want to let users write arbitrary data into our logfiles,
+    which could happen if they e.g. managed to trigger a ValueError with
+    a carefully-crafted payload.  This function formats the traceback
+    using "%r" for the actual exception data, which passes it through repr()
+    so that any special chars are safely escaped.
+    """
+    lines = ["Uncaught exception:\n"]
+    lines.extend(traceback.format_tb(exc_tb))
+    lines.append("%r\n" % (exc_typ,))
+    lines.append("%r\n" % (exc_val,))
+    return "".join(lines)
