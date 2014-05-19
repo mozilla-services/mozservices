@@ -27,9 +27,11 @@ from mozsvc.user.permissivenoncecache import PermissiveNonceCache
 from mozsvc.user import TokenServerAuthenticationPolicy
 
 try:
+    from mozsvc.storage.mcclient import MemcachedClient
     from mozsvc.user.noncecache import MemcachedNonceCache
-    MEMCACHED = True
-except ImportError:
+    # We'll test for a live memcached server when we actually run the tests.
+    MEMCACHED = None
+except (ImportError, BackendError):
     MEMCACHED = False
 
 
@@ -311,6 +313,14 @@ class UserTestCase(TestCase):
 class TestMemcachedNonceCache(unittest2.TestCase):
 
     def setUp(self):
+        global MEMCACHED
+        if MEMCACHED is None:
+            try:
+                MemcachedClient().get("")
+            except BackendError:
+                MEMCACHED = False
+            else:
+                MEMCACHED = True
         if not MEMCACHED:
             raise unittest2.SkipTest("no memcache")
         self.nc = None
