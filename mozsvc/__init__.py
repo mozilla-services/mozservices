@@ -18,6 +18,9 @@ def includeme(config):
         * add a /__heartbeat__ route and default view implementation
 
     """
+    if config.registry.get("mozsvc.has_been_included"):
+        return
+    config.registry["mozsvc.has_been_included"] = True
     config.add_route('heartbeat', '/__heartbeat__')
     config.include('mozsvc.tweens')
     config.include('mozsvc.metrics')
