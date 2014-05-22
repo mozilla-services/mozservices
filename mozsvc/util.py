@@ -130,10 +130,12 @@ class JsonLogFormatter(logging.Formatter):
         for key, value in record.__dict__.iteritems():
             if key not in self.DEFAULT_LOGRECORD_ATTRS:
                 details[key] = value
-        # Only include the 'message' key if it has useful content.
+        # Only include the 'message' key if it has useful content
+        # and is not already a JSON blob.
         message = record.getMessage()
         if message:
-            details["message"] = message
+            if not message.startswith("{") and not message.endswith("}"):
+                details["message"] = message
         # If there is an error, format it for nice output.
         if record.exc_info is not None:
             details["error"] = repr(record.exc_info[1])
