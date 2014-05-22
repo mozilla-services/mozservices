@@ -26,6 +26,8 @@ class TestJsonLogFormatter(unittest2.TestCase):
         self.assertEquals(details["name"], "root")
         self.assertEquals(details["pid"], os.getpid())
         self.assertEquals(details["op"], "root")
+        self.assertEquals(details["v"], 1)
+        self.assertTrue("time" in details)
 
     def test_custom_paramters(self):
         logger = logging.getLogger("mozsvc.test.test_logging")

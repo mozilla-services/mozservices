@@ -7,10 +7,12 @@
 
 import json
 import time
+import socket
 import urllib
 import logging
 import urlparse
 import traceback
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from pyramid.util import DottedNameResolver
@@ -117,14 +119,20 @@ class JsonLogFormatter(logging.Formatter):
         'relativeCreated', 'thread', 'threadName'
     ))
 
+    DEFAULT_DETAILS = {
+        "v": 1,
+        "hostname": socket.gethostname(),
+    }
+
     def format(self, record):
         # Take default values from the record and the environment.
-        details = {
+        details = self.DEFAULT_DETAILS.copy()
+        details.update({
             "op": record.name,
             "name": record.name,
-            "time": int(record.created * 1000),
+            "time": datetime.utcfromtimestamp(record.created).isoformat()+"Z",
             "pid": record.process,
-        }
+        })
         # Include any custom attributes set on the record.
         # These would usually be collected metrics data.
         for key, value in record.__dict__.iteritems():
