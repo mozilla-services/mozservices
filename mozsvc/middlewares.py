@@ -17,6 +17,14 @@ import os
 import logging
 from ConfigParser import NoOptionError
 
+# Also support the newer "configparser" module, if installed.
+try:
+    import configparser
+except ImportError:
+    pass
+else:
+    NoOptionError = (NoOptionError, configparser.NoOptionError)
+
 
 random.seed()
 _RE_CODE = re.compile('[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}')
