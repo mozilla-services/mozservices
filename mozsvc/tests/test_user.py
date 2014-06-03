@@ -14,7 +14,6 @@ from zope.interface import implements
 import pyramid.testing
 import pyramid.request
 from pyramid.interfaces import IAuthenticationPolicy
-from pyramid.security import authenticated_userid
 from pyramid.httpexceptions import HTTPUnauthorized
 
 import tokenlib
@@ -138,14 +137,15 @@ class UserTestCase(TestCase):
         tokenid, key = self.policy.encode_hawk_id(req, 42)
         hawkauthlib.sign_request(req, tokenid, key)
         # That should be enough to authenticate.
-        self.assertEquals(authenticated_userid(req), 42)
+        self.assertEquals(req.authenticated_userid, 42)
         self.assertEquals(req.user.get("uid"), 42)
         # Check that it rejects invalid Hawk ids.
         req = self.make_request()
         hawkauthlib.sign_request(req, tokenid, key)
         authz = req.environ["HTTP_AUTHORIZATION"]
         req.environ["HTTP_AUTHORIZATION"] = authz.replace(tokenid, "XXXXXX")
-        self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+        with self.assertRaises(HTTPUnauthorized):
+            req.authenticated_userid
         # And that the rejection gets raised when accessing request.user
         self.assertRaises(HTTPUnauthorized, getattr, req, "user")
 
@@ -196,7 +196,7 @@ class UserTestCase(TestCase):
                                      secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should accept a request signed with the new secret on host1.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host1.com",
@@ -205,7 +205,7 @@ class UserTestCase(TestCase):
                                      secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should reject a request signed with secret from other host.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
@@ -214,7 +214,8 @@ class UserTestCase(TestCase):
                                      secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
-            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+            with self.assertRaises(HTTPUnauthorized):
+                req.authenticated_userid
             # It should reject a request over plain http when host2 is ssl.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
@@ -223,7 +224,8 @@ class UserTestCase(TestCase):
                                      secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
-            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+            with self.assertRaises(HTTPUnauthorized):
+                req.authenticated_userid
             # It should accept a request signed with the new secret on host2.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host2.com",
@@ -233,7 +235,7 @@ class UserTestCase(TestCase):
                                      secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should accept a request to host1 with an explicit port number.
             # Use some trickery to give host_url a value with default port.
             req = ExpandoRequest(self.make_request(config=config2, environ={
@@ -245,7 +247,7 @@ class UserTestCase(TestCase):
                                      secret="secret11")
             key = tokenlib.get_token_secret(id, secret="secret11")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should accept a request to host2 with an explicit port number.
             # Use some trickery to give host_url a value with default port.
             req = ExpandoRequest(self.make_request(config=config2, environ={
@@ -257,7 +259,7 @@ class UserTestCase(TestCase):
                                      secret="secret22")
             key = tokenlib.get_token_secret(id, secret="secret22")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should accept a request to host3 on a custom port.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host3.com:444",
@@ -267,7 +269,7 @@ class UserTestCase(TestCase):
                                      secret="secret32")
             key = tokenlib.get_token_secret(id, secret="secret32")
             hawkauthlib.sign_request(req, id, key)
-            self.assertEquals(authenticated_userid(req), 42)
+            self.assertEquals(req.authenticated_userid, 42)
             # It should reject unknown hostnames.
             req = self.make_request(config=config2, environ={
                 "HTTP_HOST": "host4.com",
@@ -276,7 +278,8 @@ class UserTestCase(TestCase):
                                      secret="secret12")
             key = tokenlib.get_token_secret(id, secret="secret12")
             hawkauthlib.sign_request(req, id, key)
-            self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+            with self.assertRaises(HTTPUnauthorized):
+                req.authenticated_userid
 
     def test_checking_of_token_node_assignment(self):
         # Generate a token for one node
@@ -286,14 +289,15 @@ class UserTestCase(TestCase):
         tokenid, key = self.policy.encode_hawk_id(req, 42)
         # It can authenticate for requests to that node.
         hawkauthlib.sign_request(req, tokenid, key)
-        self.assertEquals(authenticated_userid(req), 42)
+        self.assertEquals(req.authenticated_userid, 42)
         self.assertEquals(req.user.get("uid"), 42)
         # But not requests to some other node.
         req = self.make_request(environ={
             "HTTP_HOST": "host2.com",
         })
         hawkauthlib.sign_request(req, tokenid, key)
-        self.assertRaises(HTTPUnauthorized, authenticated_userid, req)
+        with self.assertRaises(HTTPUnauthorized):
+            req.authenticated_userid
 
 
 class TestMemcachedNonceCache(unittest2.TestCase):

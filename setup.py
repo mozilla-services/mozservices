@@ -13,7 +13,7 @@ with open(os.path.join(here, 'README.txt')) as f:
 with open(os.path.join(here, 'CHANGES.txt')) as f:
     CHANGES = f.read()
 
-requires = ['pyramid', 'simplejson', 'konfig']
+requires = ['pyramid>=1.5', 'simplejson', 'konfig']
 
 tests_require = requires + [
             'pyramid_hawkauth', 'tokenlib', 'hawkauthlib>=0.1.1',
@@ -45,5 +45,4 @@ setup(name='mozsvc',
       install_requires=requires,
       extras_require=extras_require,
       tests_require=tests_require,
-      test_suite="mozsvc.tests",
-      paster_plugins=['pyramid'])
+      test_suite="mozsvc.tests")

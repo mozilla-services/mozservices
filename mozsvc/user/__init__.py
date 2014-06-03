@@ -13,7 +13,6 @@ Utilities for authentication via Mozilla's TokenServer auth system.
 from zope.interface import implements
 
 from pyramid.request import Request
-from pyramid.security import authenticated_userid
 from pyramid.authorization import ACLAuthorizationPolicy
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.httpexceptions import HTTPUnauthorized
@@ -58,7 +57,7 @@ class RequestWithUser(Request):
         user = self.environ[ENVIRON_KEY_IDENTITY] = {}
         # Call the standard authn framework to authenticate.
         try:
-            userid = authenticated_userid(self)
+            userid = self.authenticated_userid
         except Exception:
             self.environ.pop(ENVIRON_KEY_IDENTITY, None)
             raise
