@@ -29,7 +29,7 @@ class MemcachedNonceCache(object):
     under a key sha1(<timestamp>:<nonce>).
     """
 
-    def __init__(self, window=None, get_time=None, cache_servers=None,
+    def __init__(self, window=None, get_time=None, cache_server=None,
                  cache_key_prefix="noncecache:", cache_pool_size=None,
                  cache_pool_timeout=60, **kwds):
         # Memcached ttls are in integer seconds, so round up to the nearest.
@@ -39,7 +39,7 @@ class MemcachedNonceCache(object):
             window = int(math.ceil(window))
         self.window = window
         self.get_time = get_time or time.time
-        self.mcclient = MemcachedClient(cache_servers, cache_key_prefix,
+        self.mcclient = MemcachedClient(cache_server, cache_key_prefix,
                                         cache_pool_size, cache_pool_timeout)
 
     def __len__(self):

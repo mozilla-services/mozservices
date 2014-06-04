@@ -12,6 +12,7 @@ for serialization, error reporting and connection pooling.
 import sys
 import time
 import logging
+import warnings
 import traceback
 import contextlib
 import Queue
@@ -44,21 +45,21 @@ class MemcachedClient(object):
 
     """
 
-    def __init__(self, servers=None, key_prefix="", pool_size=None,
+    def __init__(self, server=None, key_prefix="", pool_size=None,
                  pool_timeout=60, max_key_size=None, max_value_size=None,
                  **kwds):
-        if servers is None:
-            servers = ["127.0.0.1:11211"]
-        elif isinstance(servers, basestring):
-            servers = [servers]
+        if "servers" in kwds:
+            msg = "MemcachedClient supports only a single server; please "\
+                  "use the 'server' argument rather than 'servers'"
+            warnings.warn(msg, DeprecationWarning, stacklevel=1)
+            if server is None:
+                server = kwds.pop("servers")
+                if not isinstance(server, basestring):
+                    server = server[0]
+        if server is None:
+            server = "127.0.0.1:11211"
         self.key_prefix = key_prefix
-        # XXX TODO: umemcache doesn't support clustering.
-        # We could implement this ourselves, but is it worth it?
-        if len(servers) > 1:
-            msg = "Multiple servers are not currently supported. "
-            msg += "Consider using moxi for transparent clustering support."
-            raise ValueError(msg)
-        self.pool = MCClientPool(servers[0], pool_size, pool_timeout)
+        self.pool = MCClientPool(server, pool_size, pool_timeout)
         self.max_key_size = max_key_size or DEFAULT_MAX_KEY_SIZE
         self.max_value_size = max_value_size or DEFAULT_MAX_VALUE_SIZE
 
