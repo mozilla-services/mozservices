@@ -131,24 +131,24 @@ class TestMetrics(unittest2.TestCase):
             register_service_views(config, stub_service)
             app = TestApp(config.make_wsgi_app())
 
-            res = app.get("/ok", status=200)
+            app.get("/ok", status=200)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 200)
 
-            res = app.get("/notfound", status=404)
+            app.get("/notfound", status=404)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 404)
-            res = app.get("/forbidden", status=403)
+            app.get("/forbidden", status=403)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 403)
 
-            res = app.get("/exc_notfound", status=404)
+            app.get("/exc_notfound", status=404)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 404)
-            res = app.get("/exc_forbidden", status=403)
+            app.get("/exc_forbidden", status=403)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 403)
 
-            res = app.get("/impl_forbidden", status=403)
+            app.get("/impl_forbidden", status=403)
             r = self.logs.records[-1]
             self.assertEquals(r.code, 403)
