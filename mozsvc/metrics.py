@@ -68,7 +68,7 @@ def add_response_metrics(request, response):
     """
     start_time = request.metrics.pop("request_start_time")
     request.metrics["request_time"] = timeit.default_timer() - start_time
-    request.metrics["code"] = request.response.status_code
+    request.metrics["code"] = response.status_code
 
 
 def finalize_request_metrics(request, message=None):

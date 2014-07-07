@@ -2,7 +2,8 @@
 import time
 import unittest2
 
-from pyramid.request import Request
+from pyramid.request import Request, Response
+from pyramid.httpexceptions import HTTPNotFound, HTTPForbidden
 
 from webtest import TestApp
 from testfixtures import LogCapture
@@ -104,3 +105,50 @@ class TestMetrics(unittest2.TestCase):
     def test_timing_contextmanager_doesnt_fail_if_no_reqest_object(self):
         with metrics_timer("timer1"):
             time.sleep(0.01)
+
+    def test_that_service_metrics_include_correct_response_codes(self):
+        stub_service = Service(name="stub", path="/{what}")
+
+        @stub_service.get()
+        def stub_view(request):
+            what = request.matchdict["what"]
+            if what == "ok":
+                return Response(status=200)
+            if what == "notfound":
+                return Response(status=404)
+            if what == "forbidden":
+                return Response(status=403)
+            if what == "exc_forbidden":
+                raise HTTPForbidden
+            if what == "impl_forbidden":
+                request.response.status_code = 403
+                return ""
+            raise HTTPNotFound
+
+        with pyramid.testing.testConfig() as config:
+            config.include("cornice")
+            config.include("mozsvc")
+            register_service_views(config, stub_service)
+            app = TestApp(config.make_wsgi_app())
+
+            res = app.get("/ok", status=200)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 200)
+
+            res = app.get("/notfound", status=404)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 404)
+            res = app.get("/forbidden", status=403)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 403)
+
+            res = app.get("/exc_notfound", status=404)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 404)
+            res = app.get("/exc_forbidden", status=403)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 403)
+
+            res = app.get("/impl_forbidden", status=403)
+            r = self.logs.records[-1]
+            self.assertEquals(r.code, 403)
