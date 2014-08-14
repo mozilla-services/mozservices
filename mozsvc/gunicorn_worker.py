@@ -12,6 +12,7 @@ extra operational niceties.
 """
 
 import os
+import gc
 import sys
 import time
 import thread
@@ -40,6 +41,20 @@ _real_get_ident = thread.get_ident
 MAX_BLOCKING_TIME = float(os.environ.get("GEVENT_MAX_BLOCKING_TIME", 0.1))
 
 
+# The maximum amount of memory the worker is allowed to consume, in KB.
+# If it exceeds this amount it will (attempt to) gracefully terminate.
+MAX_MEMORY_USAGE = os.environ.get("MOZSVC_MAX_MEMORY_USAGE", "").lower()
+if MAX_MEMORY_USAGE:
+    import psutil
+    if MAX_MEMORY_USAGE.endswith("k"):
+        MAX_MEMORY_USAGE = MAX_MEMORY_USAGE[:-1]
+    MAX_MEMORY_USAGE = int(MAX_MEMORY_USAGE) * 1024
+    # How frequently to check memory usage, in seconds.
+    MEMORY_USAGE_CHECK_INTERVAL = 2
+    # If a gc brings us back below this threshold, we can avoid termination.
+    MEMORY_USAGE_RECOVERY_THRESHOLD = MAX_MEMORY_USAGE * 0.8
+
+
 # The filename for dumping memory usage data.
 MEMORY_DUMP_FILE = os.environ.get("MOZSVC_MEMORY_DUMP_FILE",
                                   "/tmp/mozsvc-memdump")
@@ -51,8 +66,13 @@ class MozSvcGeventWorker(GeventWorker):
     This is a custom gunicorn worker class, based on the standard gevent worker
     but with some extra operational- and debugging-related features:
 
-        * a background thread that monitors for blocking of the gevent
-          event-loop, and logs tracebacks if blocking code is found.
+        * a background thread that monitors execution by checking for:
+
+            * blocking of the gevent event-loop, with tracebacks
+              logged if blocking code is found.
+
+            * overall memory usage, with forced-gc and graceful shutdown
+              if memory usage goes beyond a defined limit.
 
         * a timeout enforced on each individual request, rather than on
           inactivity of the worker as a whole.
@@ -66,6 +86,12 @@ class MozSvcGeventWorker(GeventWorker):
     """
 
     def init_process(self):
+        # Check if we need a background thread to monitor memory use.
+        needs_monitoring_thread = False
+        if MAX_MEMORY_USAGE:
+            self._last_memory_check_time = time.time()
+            needs_monitoring_thread = True
+
         # Set up a greenlet tracing hook to monitor for event-loop blockage,
         # but only if monitoring is both possible and required.
         if hasattr(greenlet, "settrace") and MAX_BLOCKING_TIME > 0:
@@ -77,11 +103,14 @@ class MozSvcGeventWorker(GeventWorker):
             self._active_greenlet = None
             self._greenlet_switch_counter = 0
             greenlet.settrace(self._greenlet_switch_tracer)
-            # Create a real thread to monitor for blocking of greenlets.
-            # Since this will be a long-running daemon thread, it's OK to
-            # fire-and-forget using the low-level start_new_thread function.
             self._main_thread_id = _real_get_ident()
-            _real_start_new_thread(self._greenlet_blocking_monitor, ())
+            needs_monitoring_thread = True
+
+        # Create a real thread to monitor out execution.
+        # Since this will be a long-running daemon thread, it's OK to
+        # fire-and-forget using the low-level start_new_thread function.
+        if needs_monitoring_thread:
+            _real_start_new_thread(self._process_monitoring_thread, ())
 
         # Continue to superclass initialization logic.
         # Note that this runs the main loop and never returns.
@@ -117,46 +146,73 @@ class MozSvcGeventWorker(GeventWorker):
         self._active_greenlet = target
         self._greenlet_switch_counter += 1
 
-    def _greenlet_blocking_monitor(self):
-        """Method run in background thread that checks for regular switches.
+    def _process_monitoring_thread(self):
+        """Method run in background thread that monitors our execution.
 
         This method is an endless loop that gets executed in a background
-        thread.  It periodically wakes up and checks whether the active
-        greenlet has switched since it was last checked.  If not then an
-        error log is generated.
+        thread.  It periodically wakes up and checks:
 
-        The only exception is for the greenlet running the gevent Hub, which
-        is allowed to block indefinitely while waiting for I/O.
+            * whether the active greenlet has switched since last checked
+            * whether memory usage is within the defined limit
+
         """
+        # Find the minimum interval between checks.
+        if MAX_MEMORY_USAGE:
+            sleep_interval = MEMORY_USAGE_CHECK_INTERVAL
+            if MAX_BLOCKING_TIME and MAX_BLOCKING_TIME < sleep_interval:
+                sleep_interval = MAX_BLOCKING_TIME
+        else:
+            sleep_interval = MAX_BLOCKING_TIME
+        # Run the checks in an infinite sleeping loop.
         try:
             while True:
-                # Check the switch counter before and after a sleep.
-                # If it hasn't increased then the active greenlet is blocking.
-                old_switch_counter = self._greenlet_switch_counter
-                _real_sleep(MAX_BLOCKING_TIME)
-                active_greenlet = self._active_greenlet
-                new_switch_counter = self._greenlet_switch_counter
-                # If we have detected a successful switch, reset the counter
-                # to zero.  This might race with it being incrememted in the
-                # other thread, but should succeed often enough to prevent
-                # the counter from growing without bound.
-                if new_switch_counter != old_switch_counter:
-                    self._greenlet_switch_counter = 0
-                # If we detected a blocking greenlet, grab the stack trace
-                # and log an error.  The active greenlet's frame is not
-                # available from the greenlet object itself, we have to look
-                # up the current frame of the main thread for the traceback.
-                else:
-                    if active_greenlet not in (None, self._active_hub):
-                        frame = sys._current_frames()[self._main_thread_id]
-                        stack = traceback.format_stack(frame)
-                        err_log = ["Greenlet appears to be blocked\n"] + stack
-                        logger.error("".join(err_log))
+                _real_sleep(sleep_interval)
+                self._check_greenlet_blocking()
+                self._check_memory_usage()
         except Exception:
             # Swallow any exceptions raised during interpreter shutdown.
             # Daemonic Thread objects have this same behaviour.
             if sys is not None:
                 raise
+
+    def _check_greenlet_blocking(self):
+        if not MAX_BLOCKING_TIME:
+            return
+        # If there have been no greenlet switches since we last checked,
+        # grab the stack trace and log an error.  The active greenlet's frame
+        # is not available from the greenlet object itself, we have to look
+        # up the current frame of the main thread for the traceback.
+        if self._greenlet_switch_counter == 0:
+            active_greenlet = self._active_greenlet
+            # The hub gets a free pass, since it blocks waiting for IO.
+            if active_greenlet not in (None, self._active_hub):
+                frame = sys._current_frames()[self._main_thread_id]
+                stack = traceback.format_stack(frame)
+                err_log = ["Greenlet appears to be blocked\n"] + stack
+                logger.error("".join(err_log))
+        # Reset the count to zero.
+        # This might race with it being incremented in the main thread,
+        # but not often enough to cause a false positive.
+        self._greenlet_switch_counter = 0
+
+    def _check_memory_usage(self):
+        if not MAX_MEMORY_USAGE:
+            return
+        elapsed = time.time() - self._last_memory_check_time
+        if elapsed > MEMORY_USAGE_CHECK_INTERVAL:
+            mem_usage = psutil.Process().memory_info().rss
+            if mem_usage > MAX_MEMORY_USAGE:
+                logger.info("memory usage %d > %d, forcing gc",
+                            mem_usage, MAX_MEMORY_USAGE)
+                # Try to clean it up by forcing a full collection.
+                gc.collect()
+                mem_usage = psutil.Process().memory_info().rss
+                if mem_usage > MEMORY_USAGE_RECOVERY_THRESHOLD:
+                    # Didn't clean up enough, we'll have to terminate.
+                    logger.warn("memory usage %d > %d after gc, quitting",
+                                mem_usage, MAX_MEMORY_USAGE)
+                    self.alive = False
+            self._last_memory_check_time = time.time()
 
     def _dump_memory_usage(self, *args):
         """Dump memory usage data to a file.
