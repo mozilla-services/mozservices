@@ -10,6 +10,8 @@
   has only ever supported a single server.
 - removed dependency on metlog, replacing it with stdlib logging
   and a very simple scheme for annotating metrics onto a request.
+- added a json log formatter, useful for logs that are machined
+  processed by e.g. heka
 
 
 0.7 - 2012-11-14
