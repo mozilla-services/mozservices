@@ -74,7 +74,7 @@ class TestCase(unittest2.TestCase):
         """Load the configurator to use for the tests."""
         # Load config from the .ini file.
         if not hasattr(self, "ini_file"):
-            if hasattr(self, "TEST_INI_FILE" ):
+            if hasattr(self, "TEST_INI_FILE"):
                 self.ini_file = self.TEST_INI_FILE
             else:
                 # The file to use may be specified in the environment.
