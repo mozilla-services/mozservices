@@ -161,5 +161,6 @@ def includeme(config):
     """Include all the mozsvc tweens into the given config."""
     config.add_tween("mozsvc.tweens.catch_backend_errors")
     config.add_tween("mozsvc.tweens.log_uncaught_exceptions")
-    config.add_tween("mozsvc.tweens.fuzz_backoff_headers")
-    config.add_tween("mozsvc.tweens.send_backoff_responses")
+    if not config.registry.settings.get("mozsvc.dont_fuzz", False):
+        config.add_tween("mozsvc.tweens.fuzz_backoff_headers")
+        config.add_tween("mozsvc.tweens.send_backoff_responses")
