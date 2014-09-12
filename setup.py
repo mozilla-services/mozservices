@@ -26,7 +26,7 @@ extras_require = {
 
 
 setup(name='mozsvc',
-      version='0.8',
+      version='0.9dev',
       description='Various utilities for Mozilla apps',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
