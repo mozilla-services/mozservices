@@ -230,9 +230,9 @@ class MCClientPool(object):
     seems to work around some occasional hangs that were occurring with
     long-lived clients.
 
-    To initialise the pool you must provide the list of server addresses
-    to access.  You may also specify the maximum size of the pool and the
-    time after which old connections will be recycled.
+    To initialise the pool you must provide the server address to access.
+    You may also specify the maximum size of the pool and the time after
+    which old connections will be recycled.
 
     To obtain a Client object from the pool, call reserve() as a context
     manager like this::
