@@ -60,8 +60,10 @@ class TestUtil(unittest.TestCase):
 
     def test_dnslookup(self):
 
+        ZIADE_DOT_ORG = "195.154.97.69"
+
         self.assertEqual(dnslookup('http://ziade.org/'),
-                         'http://88.191.140.69/')
+                         'http://%s/' % (ZIADE_DOT_ORG,))
 
         self.assertEqual(dnslookup('http://user:pass@ziade.org:80/path'),
-                         'http://user:pass@88.191.140.69:80/path')
+                         'http://user:pass@%s:80/path' % (ZIADE_DOT_ORG,))
