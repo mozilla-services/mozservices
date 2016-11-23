@@ -1,3 +1,9 @@
+0.9
+===
+
+- small test fixes and updates for latest versions of dependencies
+
+
 0.8
 ===
 

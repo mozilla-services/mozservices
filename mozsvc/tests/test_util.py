@@ -60,7 +60,9 @@ class TestUtil(unittest.TestCase):
 
     def test_dnslookup(self):
 
-        ZIADE_DOT_ORG = "195.154.97.69"
+        # TODO: This priodically breaks when Tarek gets a new IP
+        # for his server, we should use something more stable...
+        ZIADE_DOT_ORG = "163.172.47.3"
 
         self.assertEqual(dnslookup('http://ziade.org/'),
                          'http://%s/' % (ZIADE_DOT_ORG,))
