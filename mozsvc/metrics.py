@@ -21,7 +21,7 @@ import logging
 import functools
 
 import pyramid.threadlocal
-from pyramid.events import NewRequest
+from pyramid.events import ContextFound
 
 
 logger = logging.getLogger("mozsvc.metrics")
@@ -195,4 +195,7 @@ def new_request_listener(event):
 
 def includeme(config):
     """Include the mozsvc metrics hooks into the given config."""
-    config.add_subscriber(new_request_listener, NewRequest)
+    # The metrics-gathering code assumes a well-formed request,
+    # so it's only safe to add it after pyramid has done a certain
+    # amount of processing and view resolution.
+    config.add_subscriber(new_request_listener, ContextFound)

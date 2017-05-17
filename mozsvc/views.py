@@ -4,11 +4,17 @@
 # file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 # ***** END LICENSE BLOCK *****
-""" Cornice default views/.
-"""
+
 from pyramid.view import view_config
+from pyramid.exceptions import URLDecodeError
+from pyramid.httpexceptions import HTTPNotFound
 
 
 @view_config(route_name='heartbeat', renderer='string')
 def hearbeat(request):
     return 'OK'
+
+
+@view_config(context=URLDecodeError)
+def invalid_url_view(request):
+    return HTTPNotFound()
