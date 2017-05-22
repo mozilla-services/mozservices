@@ -1,3 +1,9 @@
+0.10
+====
+
+- fix handling of non-utf8 path components
+
+
 0.9
 ===
 
