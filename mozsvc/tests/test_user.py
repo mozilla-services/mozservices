@@ -30,8 +30,10 @@ try:
     from mozsvc.user.noncecache import MemcachedNonceCache
     # We'll test for a live memcached server when we actually run the tests.
     MEMCACHED = None
-except (ImportError, BackendError):
+except (ImportError, BackendError) as err:
     MEMCACHED = False
+
+TEST_MEMCACHE_KEY = 'mozsvc_unittest'
 
 
 class ExpandoRequest(object):
@@ -306,13 +308,27 @@ class TestMemcachedNonceCache(unittest2.TestCase):
         global MEMCACHED
         if MEMCACHED is None:
             try:
-                MemcachedClient().get("")
-            except BackendError:
-                MEMCACHED = False
+                client = MemcachedClient()
+            except BackendError as err:
+                raise unittest2.SkipTest(
+                    "Got backend error ({!r}) instantiating client".format(err)
+                )
             else:
+                try:
+                    client.set(TEST_MEMCACHE_KEY, "some unimportant value")
+                    client.get(TEST_MEMCACHE_KEY)
+                except BackendError as err:
+                    raise unittest2.SkipTest(
+                        "Unable to interact with memcached ({!r})".format(err)
+                    )
+                finally:
+                    client.delete(TEST_MEMCACHE_KEY)
+
                 MEMCACHED = True
+
         if not MEMCACHED:
-            raise unittest2.SkipTest("no memcache")
+            raise unittest2.SkipTest("Unable to import required modules.")
+
         self.nc = None
         self.keys_to_delete = set()
 

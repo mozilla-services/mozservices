@@ -75,11 +75,11 @@ class MemcachedClient(object):
                 # disconnect so that it will be removed from the pool.
                 try:
                     yield mc
-                except (EnvironmentError, RuntimeError), err:
+                except (EnvironmentError, RuntimeError) as err:
                     if mc is not None:
                         mc.disconnect()
                     raise
-        except (EnvironmentError, RuntimeError), err:
+        except (EnvironmentError, RuntimeError) as err:
             err = traceback.format_exc()
             logger.error(err)
             raise BackendError(str(err))

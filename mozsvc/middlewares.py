@@ -104,7 +104,7 @@ class CatchErrorMiddleware(object):
     def __call__(self, environ, start_response):
         try:
             return self.app(environ, start_response)
-        except:
+        except Exception:
             err = traceback.format_exc()
             hash = create_hash(err)
             self.logger.error(hash)
