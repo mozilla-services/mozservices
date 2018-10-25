@@ -8,7 +8,7 @@ WSGIProxy
 pyramid_hawkauth
 tokenlib
 hawkauthlib
-umemcache
+umemcache>=1.3
 gunicorn
 gevent
 konfig

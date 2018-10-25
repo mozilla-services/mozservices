@@ -1,7 +1,10 @@
 language: python
 
 python:
- - "2.7"
+  - "2.7"
+
+services:
+  - memcached
 
 notifications:
   email:
@@ -14,7 +17,7 @@ notifications:
 
 install:
   - pip install flake8
-  - python setup.py develop
+  - CFLAGS="-Wno-error=write-strings" pip install .[memcache]
 
 script:
   - flake8 ./mozsvc
